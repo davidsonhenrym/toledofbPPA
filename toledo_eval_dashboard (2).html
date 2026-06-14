@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Toledo Football — Evaluation & Intelligence Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0a0c0e;--surface:#111418;--surface2:#181c22;--surface3:#1e242c;
+  --border:#252c36;--border2:#323c48;
+  --text:#dde3eb;--text2:#7d8a99;--text3:#49545f;
+  --gold:#c8a84b;--gold2:#e8c46a;--gold-dim:#7a641e;--gold-bg:rgba(200,168,75,0.07);
+  --green:#3ecf8e;--red:#e05252;--blue:#4a9eff;--purple:#a78bfa;--amber:#f59e0b;
+  --r:6px;--rl:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:13px}
+body{background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,sans-serif;line-height:1.5;min-height:100vh;overflow:hidden}
+
+/* ── SHELL ── */
+.shell{display:flex;flex-direction:column;height:100vh}
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 16px;height:48px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+.logo{font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);white-space:nowrap}
+.sep{width:1px;height:18px;background:var(--border);flex-shrink:0}
+.cfg{display:flex;align-items:center;gap:7px;flex:1;min-width:0}
+.cfg input,.cfg select{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:var(--r);padding:0 8px;height:28px;font-size:12px;outline:none;transition:border-color .15s}
+.cfg input:focus,.cfg select:focus{border-color:var(--gold-dim)}
+.cfg input[type=password]{font-family:monospace;letter-spacing:.08em;width:190px}
+.cfg .ti{width:130px}.cfg .yr{width:74px}.cfg .ki{width:180px}
+.btn{display:inline-flex;align-items:center;gap:5px;background:var(--gold);color:#0a0c0e;border:none;border-radius:var(--r);padding:0 11px;height:28px;font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:opacity .15s}
+.btn:hover{opacity:.82}
+.btn-g{background:transparent;border:1px solid var(--border);color:var(--text2)}
+.btn-g:hover{border-color:var(--gold-dim);color:var(--text)}
+.btn-sm{height:24px;padding:0 8px;font-size:10px}
+.sdot{width:6px;height:6px;border-radius:50%;background:var(--border2);flex-shrink:0}
+.sdot.ok{background:var(--green)}.sdot.err{background:var(--red)}.sdot.ld{background:var(--gold);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.smsg{font-size:10px;color:var(--text3);white-space:nowrap}
+
+.body{display:flex;flex:1;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:168px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:8px 0}
+.ns{font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--text3);padding:10px 14px 3px}
+.ni{display:flex;align-items:center;gap:8px;padding:7px 14px;font-size:11px;font-weight:500;color:var(--text2);cursor:pointer;border-left:2px solid transparent;transition:all .12s}
+.ni:hover{color:var(--text);background:var(--surface2)}
+.ni.active{color:var(--gold);border-left-color:var(--gold);background:var(--gold-bg)}
+.ni-ic{font-size:13px;width:14px;text-align:center;flex-shrink:0}
+
+/* ── MAIN ── */
+.main{flex:1;overflow-y:auto;padding:18px}
+.tab{display:none}.tab.active{display:block}
+
+/* ── METRIC CARDS ── */
+.mg{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:16px}
+.mc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:12px 14px}
+.mc.gold{border-color:var(--gold-dim);background:var(--gold-bg)}
+.mc-l{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:5px}
+.mc-v{font-size:22px;font-weight:700;letter-spacing:-.02em;line-height:1}
+.mc.gold .mc-v{color:var(--gold)}
+.mc-s{font-size:10px;color:var(--text2);margin-top:3px}
+
+/* ── SECTION HEADS ── */
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;margin-top:18px}
+.sh:first-child{margin-top:0}
+.st{font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--text3)}
+.sa{display:flex;gap:5px;align-items:center}
+
+/* ── TABLES ── */
+.tw{overflow-x:auto;border:1px solid var(--border);border-radius:var(--rl);margin-bottom:16px}
+table{width:100%;border-collapse:collapse;font-size:11px}
+thead{background:var(--surface2)}
+th{padding:7px 9px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{color:var(--text2)}
+td{padding:7px 9px;border-bottom:1px solid var(--border);white-space:nowrap;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--surface2)}
+
+/* ── BADGES ── */
+.badge{display:inline-block;font-size:9px;font-weight:800;padding:2px 6px;border-radius:3px;letter-spacing:.04em;text-transform:uppercase}
+.b-pos{background:rgba(74,158,255,.12);color:var(--blue)}
+.b-team{background:var(--gold-bg);color:var(--gold)}
+.b-new{background:rgba(167,139,250,.12);color:var(--purple)}
+.b-portal{background:rgba(245,158,11,.12);color:var(--amber)}
+.b-w{background:rgba(62,207,142,.12);color:var(--green)}
+.b-l{background:rgba(224,82,82,.12);color:var(--red)}
+
+/* ── FILTERS ── */
+.fr{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.fr input,.fr select{background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:var(--r);padding:0 8px;height:28px;font-size:11px;outline:none}
+.fr input:focus,.fr select:focus{border-color:var(--gold-dim)}
+
+/* ── BARS ── */
+.bar-wrap{display:flex;align-items:center;gap:5px}
+.bar-tr{width:52px;height:5px;background:var(--surface3);border-radius:3px;flex-shrink:0;position:relative;overflow:hidden}
+.bar-f{height:5px;border-radius:3px;position:absolute}
+
+/* ── CHARTS ── */
+.cb{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px;margin-bottom:16px}
+.cb canvas{max-width:100%}
+
+/* ── AI BOX ── */
+.ai-box{background:var(--surface);border:1px solid var(--gold-dim);border-radius:var(--rl);padding:14px;margin-bottom:16px}
+.ai-lbl{font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.ai-body{font-size:12px;line-height:1.75;color:var(--text2);white-space:pre-wrap;min-height:36px}
+.ai-acts{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}
+
+/* ── GAME PREP DOC ── */
+.prep-doc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;margin-bottom:16px}
+.prep-header{background:var(--surface2);border-bottom:1px solid var(--border);padding:14px 18px;display:flex;justify-content:space-between;align-items:center}
+.prep-opp{font-size:16px;font-weight:700}
+.prep-meta{font-size:11px;color:var(--text2)}
+.matchup-section{padding:16px 18px;border-bottom:1px solid var(--border)}
+.matchup-section:last-child{border-bottom:none}
+.matchup-title{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:12px}
+.matchup-card{background:var(--surface2);border-radius:var(--r);padding:12px 14px;margin-bottom:10px;border-left:3px solid var(--border2)}
+.matchup-card.advantage{border-left-color:var(--green)}
+.matchup-card.disadvantage{border-left-color:var(--red)}
+.matchup-card.neutral{border-left-color:var(--border2)}
+.mc-players{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px}
+.mc-player{flex:1}
+.mc-pname{font-size:12px;font-weight:700}
+.mc-pmeta{font-size:10px;color:var(--text2);margin-top:2px}
+.mc-stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+.mc-stat{font-size:10px;color:var(--text3)}
+.mc-stat strong{color:var(--text);font-weight:600}
+.mc-vs{font-size:10px;color:var(--text3);align-self:center;flex-shrink:0}
+.mc-insight{font-size:11px;color:var(--text2);line-height:1.6;border-top:1px solid var(--border);padding-top:8px;margin-top:8px}
+
+/* ── PORTAL CARD ── */
+.portal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-bottom:16px}
+.portal-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px}
+.portal-card:hover{border-color:var(--border2)}
+.pc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+.pc-name{font-size:13px;font-weight:700}
+.pc-meta{font-size:10px;color:var(--text2);margin-top:2px}
+.pc-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;border-top:1px solid var(--border);padding-top:10px}
+.pc-stat-item .lbl{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em}
+.pc-stat-item .val{font-size:14px;font-weight:700;margin-top:1px}
+.pc-fit{font-size:10px;line-height:1.55;color:var(--text2);margin-top:10px;border-top:1px solid var(--border);padding-top:8px}
+
+/* ── ROSTER TABLE extras ── */
+.class-pill{font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;background:var(--surface3);color:var(--text2)}
+
+/* ── SPINNER / TOAST ── */
+.sp{display:inline-block;width:12px;height:12px;border:2px solid var(--border2);border-top-color:var(--gold);border-radius:50%;animation:spin .6s linear infinite;vertical-align:-2px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.toast{position:fixed;bottom:18px;right:18px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--rl);padding:9px 14px;font-size:12px;z-index:9999;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+
+/* ── MISC ── */
+.empty{text-align:center;padding:36px 20px;color:var(--text3);font-size:12px}
+.hint{font-size:10px;color:var(--text3);line-height:1.6;margin-top:5px}
+code{background:var(--surface3);border-radius:3px;padding:1px 5px;font-family:monospace;font-size:10px;color:var(--text2)}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.pos-group-head td{background:var(--surface2);font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);padding:5px 9px}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo">&#9824; Toledo Football Intel</div>
+  <div class="sep"></div>
+  <div class="cfg">
+    <input type="password" id="cfbdKey" placeholder="CFBD API key" oninput="saveCfg()"/>
+    <input type="text" class="ti" id="teamInput" value="Toledo" oninput="saveCfg()"/>
+    <select class="yr" id="yearSel" onchange="saveCfg()">
+      <option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option>
+    </select>
+    <button class="btn" onclick="loadCore()"><span id="coreSpinner" style="display:none" class="sp"></span> Load</button>
+    <div id="sdot" class="sdot"></div>
+    <span id="smsg" class="smsg">No data</span>
+    <div style="flex:1"></div>
+    <input type="text" class="ki" id="claudeKey" placeholder="Claude API key (AI features)" oninput="saveCfg()"/>
+  </div>
+</div>
+
+<div class="body">
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="ns">Roster</div>
+  <div class="ni active" onclick="sw('roster',this)"><span class="ni-ic">&#9878;</span>2026 Roster</div>
+  <div class="ni" onclick="sw('players',this)"><span class="ni-ic">&#9673;</span>Player PPA</div>
+  <div class="ni" onclick="sw('boxstats',this)"><span class="ni-ic">&#9776;</span>Box stats</div>
+  <div class="ni" onclick="sw('gamelog',this)"><span class="ni-ic">&#9654;</span>Game log</div>
+
+  <div class="ns">Intelligence</div>
+  <div class="ni" onclick="sw('portal',this)"><span class="ni-ic">&#8648;</span>Portal radar</div>
+  <div class="ni" onclick="sw('gameprep',this)"><span class="ni-ic">&#9888;</span>Game prep</div>
+  <div class="ni" onclick="sw('mac',this)"><span class="ni-ic">&#9733;</span>MAC compare</div>
+
+  <div class="ns">Tools</div>
+  <div class="ni" onclick="sw('custom',this)"><span class="ni-ic">&#9881;</span>Custom metrics</div>
+  <div class="ni" onclick="sw('ai',this)"><span class="ni-ic">&#9889;</span>AI analysis</div>
+  <div class="ni" onclick="sw('games',this)"><span class="ni-ic">&#9660;</span>Schedule</div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+<!-- ═══════════════════════════════ ROSTER ═══════════════════════════════ -->
+<div class="tab active" id="tab-roster">
+  <div id="rosterMG" class="mg" style="display:none"></div>
+  <div class="fr">
+    <select id="rPos" onchange="renderRoster()"><option value="">All positions</option><option>QB</option><option>RB</option><option>WR</option><option>TE</option><option>OL</option><option>DL</option><option>LB</option><option>DB</option><option>K</option><option>P</option></select>
+    <select id="rYr" onchange="renderRoster()"><option value="">All classes</option><option value="1">FR</option><option value="2">SO</option><option value="3">JR</option><option value="4">SR</option><option value="5">GR</option></select>
+    <input type="text" id="rQ" placeholder="Search name…" oninput="renderRoster()" style="width:150px"/>
+    <select id="rSort" onchange="renderRoster()"><option value="pos">By position</option><option value="ppa">By 2025 PPA</option><option value="totalPPA">By total PPA</option><option value="jersey"># jersey</option></select>
+    <button class="btn btn-g btn-sm" onclick="exportRosterCSV()">Export CSV</button>
+    <button class="btn btn-sm" onclick="loadRoster()"><span id="rosterSp" style="display:none" class="sp"></span> Load roster</button>
+  </div>
+  <div class="tw">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Name</th><th>Pos</th><th>Yr</th><th>Ht</th><th>Wt</th><th>Hometown</th>
+        <th>Prev school</th>
+        <th onclick="rSort2('ppa')" title="2025 PPA/play">2025 PPA</th>
+        <th onclick="rSort2('passPPA')">Pass</th>
+        <th onclick="rSort2('rushPPA')">Rush</th>
+        <th onclick="rSort2('usage')">Usage</th>
+        <th onclick="rSort2('plays')">Plays</th>
+        <th onclick="rSort2('totalPPA')">Tot PPA</th>
+        <th>Rev share tier</th>
+      </tr></thead>
+      <tbody id="rosterBody"><tr><td colspan="15"><div class="empty">Click "Load roster" to fetch 2026 Toledo roster with 2025 stats</div></td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ PLAYER PPA ═══════════════════════════ -->
+<div class="tab" id="tab-players">
+  <div id="ppaMG" class="mg" style="display:none"></div>
+  <div class="fr">
+    <select id="pPos" onchange="renderPlayers()"><option value="">All pos</option><option>QB</option><option>RB</option><option>WR</option><option>TE</option><option>OL</option><option>DL</option><option>LB</option><option>DB</option></select>
+    <select id="pTeam" onchange="renderPlayers()"><option value="focus">Focus team</option><option value="all">All D1</option></select>
+    <input type="text" id="pQ" placeholder="Name / team…" oninput="renderPlayers()" style="width:160px"/>
+    <select id="pSort" onchange="renderPlayers()"><option value="ppa">PPA/play</option><option value="totalPPA">Total PPA</option><option value="usage">Usage</option><option value="plays">Plays</option></select>
+    <select id="pTrend" onchange="renderPlayers()"><option value="">All players</option><option value="rising">Rising (last 3 wks)</option><option value="falling">Falling (last 3 wks)</option></select>
+    <button class="btn btn-g btn-sm" onclick="exportPPACSV()">CSV</button>
+  </div>
+  <div class="tw">
+    <table><thead><tr>
+      <th>#</th><th>Player</th><th>Pos</th><th>Team</th>
+      <th onclick="pColSort('ppa')">PPA/play</th>
+      <th onclick="pColSort('passPPA')">Pass PPA</th>
+      <th onclick="pColSort('rushPPA')">Rush PPA</th>
+      <th onclick="pColSort('recvPPA')">Recv PPA</th>
+      <th onclick="pColSort('usage')">Usage</th>
+      <th onclick="pColSort('plays')">Plays</th>
+      <th onclick="pColSort('totalPPA')">Total PPA</th>
+      <th id="customColHead" style="display:none">Custom</th>
+    </tr></thead>
+    <tbody id="playerBody"><tr><td colspan="12"><div class="empty">Load data to see players</div></td></tr></tbody></table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ BOX STATS ════════════════════════════ -->
+<div class="tab" id="tab-boxstats">
+  <div class="fr">
+    <select id="bsCat" onchange="loadBoxStats()">
+      <option value="passing">Passing</option>
+      <option value="rushing">Rushing</option>
+      <option value="receiving">Receiving</option>
+      <option value="defensive">Defensive</option>
+      <option value="interceptions">Interceptions</option>
+      <option value="fumbles">Fumbles</option>
+    </select>
+    <select id="bsTeam" onchange="loadBoxStats()"><option value="focus">Focus team</option><option value="all">All D1</option></select>
+    <input type="text" id="bsQ" placeholder="Search player…" oninput="renderBoxStats()" style="width:150px"/>
+  </div>
+  <div id="bsLoading" style="display:none;padding:20px;text-align:center;color:var(--text3)"><span class="sp"></span> Loading…</div>
+  <div class="tw"><table><thead><tr id="bsHead"></tr></thead><tbody id="bsBody"><tr><td colspan="8"><div class="empty">Select a category to load stats</div></td></tr></tbody></table></div>
+</div>
+
+<!-- ═══════════════════════════════ GAME LOG ═════════════════════════════ -->
+<div class="tab" id="tab-gamelog">
+  <div class="fr">
+    <select id="glPlayer" onchange="renderGameLog()"><option value="">Select player…</option></select>
+    <select id="glStat" onchange="renderGameLog()">
+      <option value="ppa">PPA/play</option><option value="passPPA">Pass PPA</option>
+      <option value="rushPPA">Rush PPA</option><option value="recvPPA">Recv PPA</option>
+    </select>
+  </div>
+  <div class="cb" style="height:240px;position:relative"><canvas id="glChart" role="img" aria-label="Player weekly PPA chart"></canvas></div>
+  <div class="cb" style="height:200px;position:relative"><canvas id="cumChart" role="img" aria-label="Cumulative PPA chart"></canvas></div>
+  <div class="tw"><table><thead><tr><th>Wk</th><th>Opponent</th><th>PPA/play</th><th>Pass PPA</th><th>Rush PPA</th><th>Recv PPA</th><th>Usage</th></tr></thead>
+  <tbody id="glBody"><tr><td colspan="7"><div class="empty">Select a player</div></td></tr></tbody></table></div>
+</div>
+
+<!-- ═══════════════════════════════ PORTAL RADAR ═════════════════════════ -->
+<div class="tab" id="tab-portal">
+  <div class="sh"><span class="st">Portal radar — fly-under-the-radar targets</span></div>
+  <div class="fr">
+    <select id="portalPos" onchange="renderPortal()"><option value="">All positions</option><option>QB</option><option>RB</option><option>WR</option><option>TE</option><option>OL</option><option>DL</option><option>LB</option><option>DB</option></select>
+    <select id="portalConf" onchange="renderPortal()">
+      <option value="">Any conference</option>
+      <option value="g5only">G5 only</option>
+      <option value="p4only">P4 only (downgrade)</option>
+    </select>
+    <select id="portalMinPPA" onchange="renderPortal()">
+      <option value="0">Min PPA: any</option>
+      <option value="0.1">Min PPA: 0.1+</option>
+      <option value="0.2">Min PPA: 0.2+</option>
+      <option value="0.3">Min PPA: 0.3+</option>
+    </select>
+    <select id="portalMinPlays" onchange="renderPortal()">
+      <option value="0">Min plays: any</option>
+      <option value="50">50+</option>
+      <option value="100">100+</option>
+      <option value="200">200+</option>
+    </select>
+    <input type="text" id="portalQ" placeholder="Name search…" oninput="renderPortal()" style="width:140px"/>
+    <button class="btn btn-sm" onclick="runPortalAI()">AI fit analysis ↗</button>
+  </div>
+  <div class="ai-box" id="portalAIBox" style="display:none">
+    <div class="ai-lbl">Portal fit analysis</div>
+    <div class="ai-body" id="portalAIText">Loading…</div>
+  </div>
+  <div class="portal-grid" id="portalGrid"><div class="empty">Load data then use filters to find targets. Showing players who entered the portal or may be available — ranked by PPA efficiency above G5 baseline.</div></div>
+  <div class="sh"><span class="st">Full portal table</span></div>
+  <div class="tw"><table><thead><tr>
+    <th>Player</th><th>Pos</th><th>Prev team</th><th>Conf</th>
+    <th onclick="portalSort('ppa')">PPA/play</th>
+    <th onclick="portalSort('totalPPA')">Total PPA</th>
+    <th onclick="portalSort('usage')">Usage</th>
+    <th onclick="portalSort('plays')">Plays</th>
+    <th>Realistic fit</th>
+  </tr></thead><tbody id="portalBody"><tr><td colspan="9"><div class="empty">Load data</div></td></tr></tbody></table></div>
+</div>
+
+<!-- ═══════════════════════════════ GAME PREP ════════════════════════════ -->
+<div class="tab" id="tab-gameprep">
+  <div class="fr">
+    <input type="text" id="gpOpp" placeholder="Opponent team name…" style="width:210px"/>
+    <select id="gpYear" style="height:28px;font-size:11px;padding:0 8px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:var(--r);outline:none">
+      <option value="2025">vs 2025 data</option><option value="2024">vs 2024 data</option>
+    </select>
+    <button class="btn" onclick="buildGamePrep()"><span id="gpSp" style="display:none" class="sp"></span> Build game prep doc</button>
+    <button class="btn btn-g btn-sm" onclick="printPrep()">Print / export</button>
+  </div>
+  <div id="prepDoc"><div class="empty" style="margin-top:40px"><div style="font-size:28px;margin-bottom:10px">&#9888;</div>Enter opponent and click "Build game prep doc"<br>Pulls their full roster stats and generates matchup analysis</div></div>
+</div>
+
+<!-- ═══════════════════════════════ MAC COMPARE ══════════════════════════ -->
+<div class="tab" id="tab-mac">
+  <div class="fr">
+    <select id="macConf" onchange="loadMac()">
+      <option value="Mid-American">MAC</option><option value="Sun Belt">Sun Belt</option>
+      <option value="Mountain West">Mountain West</option><option value="American Athletic">AAC</option>
+    </select>
+    <select id="macMetric" onchange="renderMac()">
+      <option value="offense.ppa">Off EPA/play</option>
+      <option value="offense.successRate">Off success rate</option>
+      <option value="defense.ppa">Def EPA/play</option>
+      <option value="offense.explosiveness">Explosiveness</option>
+      <option value="defense.havoc.total">Havoc rate</option>
+    </select>
+  </div>
+  <div class="cb" style="position:relative;height:300px"><canvas id="macChart" role="img" aria-label="Conference comparison chart"></canvas></div>
+  <div class="tw"><table><thead><tr><th>Rk</th><th>Team</th><th>Off EPA</th><th>Def EPA</th><th>Success %</th><th>Explosive</th><th>Havoc %</th></tr></thead>
+  <tbody id="macBody"><tr><td colspan="7"><div class="empty">Load data</div></td></tr></tbody></table></div>
+</div>
+
+<!-- ═══════════════════════════════ CUSTOM METRICS ═══════════════════════ -->
+<div class="tab" id="tab-custom">
+  <div class="sh"><span class="st">Metric builder</span></div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px;margin-bottom:16px">
+    <div class="fr" style="margin-bottom:8px">
+      <input type="text" id="mName" placeholder="Metric name…" style="width:180px"/>
+      <select id="mPos" style="height:28px;font-size:11px;padding:0 8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:var(--r);outline:none">
+        <option value="">All positions</option><option>QB</option><option>RB</option><option>WR</option><option>TE</option><option>OL</option><option>DL</option><option>LB</option><option>DB</option>
+      </select>
+      <select id="mScope" style="height:28px;font-size:11px;padding:0 8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:var(--r);outline:none">
+        <option value="roster">Roster eval</option><option value="portal">Portal radar</option><option value="both">Both</option>
+      </select>
+      <button class="btn btn-sm" onclick="saveMetric()">Save</button>
+    </div>
+    <textarea id="mFormula" rows="3" placeholder="JS formula. Variables: ppa, totalPPA, passPPA, rushPPA, recvPPA, usage, plays&#10;Example WR: (recvPPA * 0.5) + (usage * 8 * 0.3) + (totalPPA / 60 * 0.2)&#10;Example RB: (rushPPA * 0.5) + (usage * 7 * 0.35) + (totalPPA / 50 * 0.15)" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:var(--r);padding:8px;font-family:monospace;font-size:11px;resize:vertical;outline:none"></textarea>
+    <div class="hint" style="margin-top:6px">Variables: <code>ppa</code> <code>passPPA</code> <code>rushPPA</code> <code>recvPPA</code> <code>usage</code> (0–1) <code>plays</code> <code>totalPPA</code> · Also available: <code>yards</code> <code>tds</code> <code>targets</code> <code>tackles</code> when box stats loaded</div>
+  </div>
+  <div id="savedMetricsList" style="margin-bottom:16px"></div>
+  <div class="sh">
+    <span class="st">Leaderboard</span>
+    <div class="sa">
+      <select id="lbMetric" onchange="renderLB()" style="height:26px;font-size:11px;padding:0 8px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:var(--r);outline:none"><option value="">Select metric…</option></select>
+      <select id="lbPos" onchange="renderLB()" style="height:26px;font-size:11px;padding:0 8px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:var(--r);outline:none"><option value="">All pos</option><option>QB</option><option>RB</option><option>WR</option><option>TE</option><option>DL</option><option>LB</option><option>DB</option></select>
+      <select id="lbScope" onchange="renderLB()" style="height:26px;font-size:11px;padding:0 8px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:var(--r);outline:none"><option value="focus">Focus team</option><option value="all">All D1</option></select>
+    </div>
+  </div>
+  <div class="tw"><table><thead><tr><th>#</th><th>Player</th><th>Pos</th><th>Team</th><th id="lbScoreHead">Score</th><th>PPA/play</th><th>Usage</th><th>Plays</th></tr></thead>
+  <tbody id="lbBody"><tr><td colspan="8"><div class="empty">Save a metric and select it above</div></td></tr></tbody></table></div>
+</div>
+
+<!-- ═══════════════════════════════ AI ANALYSIS ══════════════════════════ -->
+<div class="tab" id="tab-ai">
+  <div class="ai-box">
+    <div class="ai-lbl"><span id="aiSp" style="display:none" class="sp"></span> AI Analysis</div>
+    <div class="ai-body" id="aiText" style="color:var(--text3)">Select a prompt or ask a custom question. Data from the loaded season is sent as context.</div>
+  </div>
+  <div class="fr">
+    <input type="text" id="aiQ" placeholder="Custom question about the data…" style="flex:1"/>
+    <button class="btn btn-sm" onclick="runCustomAI()">Ask ↗</button>
+  </div>
+  <div class="ai-acts">
+    <button class="btn btn-g btn-sm" onclick="runAI('top5')">Top 5 players</button>
+    <button class="btn btn-g btn-sm" onclick="runAI('qb')">QB eval</button>
+    <button class="btn btn-g btn-sm" onclick="runAI('wr')">WR / receiving</button>
+    <button class="btn btn-g btn-sm" onclick="runAI('rb')">RB / run game</button>
+    <button class="btn btn-g btn-sm" onclick="runAI('defense')">Defense eval</button>
+    <button class="btn btn-g btn-sm" onclick="runAI('needs')">Roster needs</button>
+    <button class="btn btn-g btn-sm" onclick="runAI('portal')">Portal targets</button>
+    <button class="btn btn-g btn-sm" onclick="runAI('revshare')">Rev share ROI</button>
+    <button class="btn btn-g btn-sm" onclick="runAI('trajectory')">Season trajectory</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ SCHEDULE ═════════════════════════════ -->
+<div class="tab" id="tab-games">
+  <div id="gamesMG" class="mg" style="display:none"></div>
+  <div id="gamesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;margin-bottom:16px">
+    <div class="empty">Load data to see schedule</div>
+  </div>
+</div>
+
+</div><!-- /main -->
+</div><!-- /body -->
+</div><!-- /shell -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════
+const CFBD = 'https://api.collegefootballdata.com';
+const ANT  = 'https://api.anthropic.com/v1/messages';
+const P4_CONFS = ['SEC','Big Ten','Big 12','ACC'];
+const G5_CONFS = ['Mid-American','Sun Belt','Mountain West','American Athletic','Conference USA'];
+
+let playerData   = [];  // normalized PPA records (all D1)
+let gameLogData  = {};  // name -> [{week,ppa,...}]
+let rosterData   = [];  // 2026 Toledo roster
+let gamesData    = [];
+let teamStatsData= [];
+let macData      = [];
+let boxStatsRaw  = [];  // raw box stats last fetched
+let boxStatsCat  = '';
+let customMetrics= JSON.parse(localStorage.getItem('cfbd_metrics_v2')||'[]');
+let pSortState   = {col:'ppa',dir:-1};
+let rSortState   = {col:'pos',dir:1};
+let portalSortSt = {col:'ppa',dir:-1};
+let macChartInst = null;
+let glChartInst  = null;
+let cumChartInst = null;
+let activeMetric = null;
+let macLoaded    = false;
+
+const CLS = {1:'FR',2:'SO',3:'JR',4:'SR',5:'GR','1':'FR','2':'SO','3':'JR','4':'SR','5':'GR'};
+const POS_ORD = {QB:0,RB:1,FB:1,WR:2,TE:3,OL:4,OT:4,OG:4,OC:4,G:4,DL:5,DE:5,DT:5,NT:5,LB:6,ILB:6,OLB:6,DB:7,CB:7,S:7,SS:7,FS:7,K:8,P:9,LS:10};
+
+// ═══════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════
+function cfbdKey(){ return document.getElementById('cfbdKey').value.trim(); }
+function claudeKey(){ return document.getElementById('claudeKey').value.trim(); }
+function getTeam(){ return document.getElementById('teamInput').value.trim()||'Toledo'; }
+function getYear(){ return document.getElementById('yearSel').value; }
+function saveCfg(){
+  localStorage.setItem('cfbd_k2', document.getElementById('cfbdKey').value);
+  localStorage.setItem('cfbd_t2', document.getElementById('teamInput').value);
+  localStorage.setItem('cfbd_y2', document.getElementById('yearSel').value);
+  localStorage.setItem('cfbd_ck2', document.getElementById('claudeKey').value);
+}
+function loadCfg(){
+  document.getElementById('cfbdKey').value   = localStorage.getItem('cfbd_k2')||'';
+  document.getElementById('teamInput').value = localStorage.getItem('cfbd_t2')||'Toledo';
+  document.getElementById('yearSel').value   = localStorage.getItem('cfbd_y2')||'2025';
+  document.getElementById('claudeKey').value = localStorage.getItem('cfbd_ck2')||'';
+}
+
+// ═══════════════════════════════════════════════════
+// NAV
+// ═══════════════════════════════════════════════════
+function sw(name, el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  if(el) el.classList.add('active');
+  if(name==='mac' && !macLoaded) loadMac();
+  if(name==='boxstats' && !boxStatsRaw.length) loadBoxStats();
+}
+
+// ═══════════════════════════════════════════════════
+// API
+// ═══════════════════════════════════════════════════
+function cfbdHdr(){ return {'Authorization':'Bearer '+cfbdKey()}; }
+async function cfbdGet(path){
+  const r = await fetch(CFBD+path,{headers:cfbdHdr()});
+  if(!r.ok) throw new Error('CFBD '+r.status+' '+path.split('?')[0]);
+  return r.json();
+}
+function setStatus(s,m){ document.getElementById('sdot').className='sdot '+s; document.getElementById('smsg').textContent=m; }
+function toast(m){ const e=document.getElementById('toast'); e.textContent=m; e.classList.add('show'); setTimeout(()=>e.classList.remove('show'),2600); }
+
+// ═══════════════════════════════════════════════════
+// NORMALIZE PPA ROW  (handles v1 nested + v2 flat)
+// ═══════════════════════════════════════════════════
+function normPPA(r){
+  const g=(v1,v2,fb=0)=>{
+    if(r[v2]!==undefined&&r[v2]!==null) return +r[v2]||fb;
+    const parts=v1.split('.');let v=r;
+    for(const p of parts){if(v==null)return fb;v=v[p];}
+    return v!=null?+v||fb:fb;
+  };
+  return {
+    athleteId: String(r.athlete_id||r.athleteId||r.id||''),
+    name:      r.name||r.player||'',
+    position:  r.position||'',
+    team:      r.team||'',
+    conference:r.conference||'',
+    ppa:       g('averagePPA.all','avg_PPA_all'),
+    passPPA:   g('averagePPA.passing','avg_PPA_pass'),
+    rushPPA:   g('averagePPA.rushing','avg_PPA_rush'),
+    recvPPA:   g('averagePPA.receiving','avg_PPA_receiving'),
+    totalPPA:  g('totalPPA.all','total_PPA_all'),
+    usage:     g('usage.overall','usage')||g('usage.overall','usage_overall'),
+    plays:     r.countablePlays||r.countable_plays||r.plays||0,
+    _raw:r
+  };
+}
+function normGameLog(r){
+  return {
+    name:    r.name||r.player||'',
+    position:r.position||'',
+    team:    r.team||'',
+    opponent:r.opponent||'',
+    week:    r.week||0,
+    ppa:     r.averagePPA?.all    ??r.avg_PPA_all??0,
+    passPPA: r.averagePPA?.passing??r.avg_PPA_pass??null,
+    rushPPA: r.averagePPA?.rushing??r.avg_PPA_rush??null,
+    recvPPA: r.averagePPA?.receiving??r.avg_PPA_receiving??null,
+    usage:   r.usage?.overall??r.usage??0,
+  };
+}
+
+// ═══════════════════════════════════════════════════
+// CORE LOAD
+// ═══════════════════════════════════════════════════
+async function loadCore(){
+  if(!cfbdKey()){ toast('Enter CFBD API key'); return; }
+  const team=getTeam(), year=getYear();
+  document.getElementById('coreSpinner').style.display='inline-block';
+  setStatus('ld','Loading…');
+  try{
+    const [rawPPA,games,stats] = await Promise.all([
+      cfbdGet('/ppa/players/season?year='+year+'&excludeGarbageTime=true'),
+      cfbdGet('/games?year='+year+'&team='+encodeURIComponent(team)+'&seasonType=regular'),
+      cfbdGet('/stats/season/advanced?year='+year+'&team='+encodeURIComponent(team))
+    ]);
+    playerData   = (rawPPA||[]).map(normPPA);
+    gamesData    = games||[];
+    teamStatsData= stats||[];
+
+    // Usage merge
+    try{
+      const uRaw = await cfbdGet('/player/usage?year='+year+'&excludeGarbageTime=true');
+      const uMap={};
+      (uRaw||[]).forEach(u=>{
+        const id=String(u.athlete_id||u.athleteId||'');
+        if(id) uMap[id]=+u.usage||0;
+      });
+      playerData.forEach(p=>{ if(uMap[p.athleteId]&&!p.usage) p.usage=uMap[p.athleteId]; });
+    }catch(e){}
+
+    // Game log for focus team
+    try{
+      const glRaw = await cfbdGet('/ppa/players/games?year='+year+'&team='+encodeURIComponent(team)+'&excludeGarbageTime=true');
+      gameLogData={};
+      (glRaw||[]).map(normGameLog).forEach(r=>{ if(!r.name)return; if(!gameLogData[r.name])gameLogData[r.name]=[]; gameLogData[r.name].push(r); });
+    }catch(e){}
+
+    renderPlayers();
+    renderGames();
+    populateGLPlayers();
+    renderPortal();
+    macLoaded=false;
+    const myCount=playerData.filter(p=>p.team.toLowerCase()===team.toLowerCase()).length;
+    setStatus('ok',team+' — '+playerData.length.toLocaleString()+' players ('+myCount+' on '+team+')');
+    toast('Core data loaded');
+  }catch(e){
+    setStatus('err',e.message.slice(0,60));
+    toast('Error: '+e.message.slice(0,80));
+    console.error(e);
+  }
+  document.getElementById('coreSpinner').style.display='none';
+}
+
+// ═══════════════════════════════════════════════════
+// ROSTER
+// ═══════════════════════════════════════════════════
+let rosterPPAById={}, rosterPPAByName={};
+function normRosterRow(r){
+  return {
+    athleteId: String(r.athlete_id||r.athleteId||r.id||''),
+    firstName: r.first_name||r.firstName||'',
+    lastName:  r.last_name||r.lastName||'',
+    name:      ((r.first_name||r.firstName||'')+' '+(r.last_name||r.lastName||'')).trim(),
+    position:  r.position||'',
+    jersey:    r.jersey!=null?r.jersey:'—',
+    classYear: r.year||r.class_year||'',
+    height:    r.height||null,
+    weight:    r.weight||null,
+    hometown:  [r.hometown,r.home_state].filter(Boolean).join(', ')||'—',
+    prevTeam:  r.previous_school||r.previousSchool||'',
+  };
+}
+function fmtHt(in2){ if(!in2)return'—'; return Math.floor(in2/12)+"'"+(in2%12)+'"'; }
+
+async function loadRoster(){
+  if(!cfbdKey()){ toast('Enter CFBD API key'); return; }
+  const team=getTeam();
+  document.getElementById('rosterSp').style.display='inline-block';
+  setStatus('ld','Loading roster…');
+  try{
+    const rawRoster = await cfbdGet('/roster?team='+encodeURIComponent(team)+'&year=2026');
+    rosterData = (rawRoster||[]).map(normRosterRow);
+
+    // Need 2025 PPA for stats — re-use playerData if loaded for 2025, else fetch
+    let ppa25 = playerData.length && getYear()==='2025' ? playerData : [];
+    if(!ppa25.length){
+      const rp = await cfbdGet('/ppa/players/season?year=2025&excludeGarbageTime=true');
+      ppa25 = (rp||[]).map(normPPA);
+    }
+    rosterPPAById={}; rosterPPAByName={};
+    ppa25.forEach(p=>{
+      if(p.athleteId) rosterPPAById[p.athleteId]=p;
+      rosterPPAByName[p.name.toLowerCase().trim()]=p;
+    });
+
+    renderRoster();
+    renderRosterSummary();
+    setStatus('ok','Roster loaded — '+rosterData.length+' players');
+    toast('2026 roster loaded');
+  }catch(e){ setStatus('err',e.message.slice(0,50)); toast('Roster error: '+e.message.slice(0,80)); }
+  document.getElementById('rosterSp').style.display='none';
+}
+
+function getRPPA(p){
+  if(p.athleteId&&rosterPPAById[p.athleteId]) return rosterPPAById[p.athleteId];
+  return rosterPPAByName[p.name.toLowerCase().trim()]||null;
+}
+
+// Revenue share tier logic (simple heuristic based on PPA + position value)
+const POS_WEIGHT = {QB:1.4,WR:1.0,RB:0.85,TE:0.9,OL:0.7,DL:0.8,LB:0.75,DB:0.7,K:0.4,P:0.4};
+function revShareTier(p, stats){
+  if(!stats) return {tier:'—',color:'var(--text3)'};
+  const pw=POS_WEIGHT[p.position]||0.75;
+  const score=(stats.ppa||0)*pw*3 + (stats.totalPPA||0)/40 + (stats.usage||0)*5;
+  if(score>2.5) return {tier:'Tier 1 ★★★',color:'var(--gold)'};
+  if(score>1.2) return {tier:'Tier 2 ★★',color:'#4a9eff'};
+  if(score>0.4) return {tier:'Tier 3 ★',color:'var(--text2)'};
+  return {tier:'Developmental',color:'var(--text3)'};
+}
+
+function renderRosterSummary(){
+  const total=rosterData.length;
+  const withStats=rosterData.filter(p=>getRPPA(p)).length;
+  const transfers=rosterData.filter(p=>p.prevTeam&&p.prevTeam.toLowerCase()!==getTeam().toLowerCase()).length;
+  const t1=rosterData.filter(p=>{ const s=getRPPA(p); return s&&revShareTier(p,s).tier.includes('Tier 1'); }).length;
+  const g=document.getElementById('rosterMG');
+  g.style.display='grid';
+  g.innerHTML=`
+    <div class="mc gold"><div class="mc-l">Roster size</div><div class="mc-v">${total}</div><div class="mc-s">2026 players</div></div>
+    <div class="mc"><div class="mc-l">With 2025 stats</div><div class="mc-v">${withStats}</div><div class="mc-s">matched to PPA data</div></div>
+    <div class="mc"><div class="mc-l">Transfers / new</div><div class="mc-v">${transfers}</div><div class="mc-s">prev school listed</div></div>
+    <div class="mc"><div class="mc-l">Tier 1 players</div><div class="mc-v" style="color:var(--gold)">${t1}</div><div class="mc-s">rev share priority</div></div>
+  `;
+}
+
+function rSort2(col){ rSortState={col,dir:rSortState.col===col?rSortState.dir*-1:(col==='pos'||col==='name'?1:-1)}; renderRoster(); }
+
+function renderRoster(){
+  const posF=document.getElementById('rPos').value;
+  const yrF=document.getElementById('rYr').value;
+  const q=document.getElementById('rQ').value.toLowerCase();
+  const srt=document.getElementById('rSort').value;
+  const team=getTeam();
+  const PG={OL:['OL','OT','OG','OC','G'],DL:['DL','DE','DT','NT'],DB:['DB','CB','S','SS','FS']};
+  let data=rosterData.filter(p=>{
+    if(posF){ const g=PG[posF]; if(g) return g.includes(p.position)||p.position===posF; return p.position===posF; }
+    if(yrF&&String(p.classYear)!==String(yrF)) return false;
+    if(q&&!p.name.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const dir=rSortState.dir;
+  const col=srt==='ppa'?'ppa':srt==='totalPPA'?'totalPPA':srt==='jersey'?'jersey':'pos';
+  data.sort((a,b)=>{
+    if(col==='pos'){ const ao=POS_ORD[a.position]??99,bo=POS_ORD[b.position]??99; if(ao!==bo)return ao-bo; return (+a.jersey||99)-(+b.jersey||99); }
+    if(col==='jersey') return ((+a.jersey||99)-(+b.jersey||99))*dir;
+    const as=getRPPA(a),bs=getRPPA(b);
+    return ((bs?bs[col]||0:0)-(as?as[col]||0:0))*dir;
+  });
+  const body=document.getElementById('rosterBody');
+  if(!data.length){ body.innerHTML='<tr><td colspan="15"><div class="empty">No players match filters</div></td></tr>'; return; }
+  let lastPos='', rows='';
+  data.forEach((p,i)=>{
+    const stats=getRPPA(p);
+    const posGroup=POS_ORD[p.position]??99;
+    const curPos=p.position;
+    if(col==='pos'&&curPos!==lastPos){
+      rows+=`<tr class="pos-group-head"><td colspan="15">${curPos}</td></tr>`;
+      lastPos=curPos;
+    }
+    const isT=p.prevTeam&&p.prevTeam.toLowerCase()!==team.toLowerCase();
+    const hasStat=!!stats;
+    const tier=revShareTier(p,stats);
+    const sc=(v,fmt=x=>x.toFixed(3))=>v===null?'<td style="color:var(--text3)">—</td>':`<td style="color:${v>=0?'var(--green)':'var(--red)'};font-weight:600">${fmt(v)}</td>`;
+    rows+=`<tr style="${!hasStat?'opacity:.5':''}${isT?';background:rgba(200,168,75,0.03)':''}">
+      <td style="color:var(--text3)">${p.jersey}</td>
+      <td style="font-weight:700">${p.firstName} ${p.lastName}${isT?' <span style="font-size:9px;color:var(--amber)">↑XFER</span>':''}</td>
+      <td><span class="badge b-pos">${p.position||'—'}</span></td>
+      <td><span class="class-pill">${CLS[p.classYear]||p.classYear||'—'}</span></td>
+      <td style="color:var(--text2)">${fmtHt(p.height)}</td>
+      <td style="color:var(--text2)">${p.weight||'—'}</td>
+      <td style="color:var(--text3);font-size:10px;max-width:110px;overflow:hidden;text-overflow:ellipsis">${p.hometown}</td>
+      <td style="font-size:10px;color:${isT?'var(--amber)':'var(--text3)'}">${p.prevTeam||'—'}</td>
+      ${sc(stats?.ppa??null)}
+      ${sc(stats?.passPPA??null,x=>x!==0?x.toFixed(3):'—')}
+      ${sc(stats?.rushPPA??null,x=>x!==0?x.toFixed(3):'—')}
+      <td>${stats?.usage!=null?((stats.usage||0)*100).toFixed(1)+'%':'—'}</td>
+      <td style="color:var(--text2)">${stats?.plays||'—'}</td>
+      ${sc(stats?.totalPPA??null,x=>x.toFixed(1))}
+      <td style="font-size:10px;color:${tier.color}">${tier.tier}</td>
+    </tr>`;
+  });
+  body.innerHTML=rows;
+}
+
+function exportRosterCSV(){
+  if(!rosterData.length){toast('Load roster first');return;}
+  const rows=[['Jersey','Name','Pos','Class','Ht','Wt','Hometown','Prev school','2025 PPA','2025 Pass PPA','2025 Rush PPA','2025 Usage','2025 Plays','2025 Total PPA','Rev Share Tier']];
+  rosterData.forEach(p=>{const s=getRPPA(p);const t=revShareTier(p,s);rows.push([p.jersey,p.name,p.position,CLS[p.classYear]||p.classYear,fmtHt(p.height),p.weight||'',p.hometown,p.prevTeam||'',s?(s.ppa||0).toFixed(3):'',s?(s.passPPA||0).toFixed(3):'',s?(s.rushPPA||0).toFixed(3):'',s?((s.usage||0)*100).toFixed(1)+'%':'',s?s.plays||0:'',s?(s.totalPPA||0).toFixed(1):'',t.tier]);});
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download=getTeam()+'_2026_roster.csv';a.click();toast('Exported');
+}
+
+// ═══════════════════════════════════════════════════
+// PLAYER PPA TABLE
+// ═══════════════════════════════════════════════════
+function pColSort(col){ pSortState={col,dir:pSortState.col===col?pSortState.dir*-1:-1}; renderPlayers(); }
+
+function renderPlayers(){
+  const pos=document.getElementById('pPos').value;
+  const tf=document.getElementById('pTeam').value;
+  const q=document.getElementById('pQ').value.toLowerCase();
+  const srt=document.getElementById('pSort').value;
+  const trend=document.getElementById('pTrend').value;
+  const team=getTeam();
+  let data=playerData.filter(p=>{
+    if(pos&&p.position!==pos)return false;
+    if(tf==='focus'&&p.team.toLowerCase()!==team.toLowerCase())return false;
+    if(q&&!p.name.toLowerCase().includes(q)&&!p.team.toLowerCase().includes(q))return false;
+    return true;
+  });
+  // Trend filter
+  if(trend&&Object.keys(gameLogData).length){
+    data=data.filter(p=>{
+      const log=gameLogData[p.name];
+      if(!log||log.length<3)return false;
+      const sorted=[...log].sort((a,b)=>b.week-a.week);
+      const recent=sorted.slice(0,3).map(r=>r.ppa||0);
+      const avg=recent.reduce((a,b)=>a+b,0)/3;
+      const early=sorted.slice(-3).map(r=>r.ppa||0);
+      const earlyAvg=early.reduce((a,b)=>a+b,0)/3;
+      return trend==='rising'?avg>earlyAvg:avg<earlyAvg;
+    });
+  }
+  const col=pSortState.col;const dir=pSortState.dir;
+  data.sort((a,b)=>{
+    const av=a[col]||0,bv=b[col]||0;
+    return typeof av==='string'?dir*av.localeCompare(bv):dir*(bv-av);
+  });
+  const top=data.slice(0,300);
+  const maxPPA=Math.max(...top.map(p=>Math.abs(p.ppa||0)),.001);
+  const ac=customMetrics.find(m=>m.name===activeMetric);
+  const showC=!!ac;
+  document.getElementById('customColHead').style.display=showC?'':'none';
+  const body=document.getElementById('playerBody');
+  if(!top.length){body.innerHTML='<tr><td colspan="12"><div class="empty">No players match</div></td></tr>';return;}
+  const myT=team.toLowerCase();
+  body.innerHTML=top.map((p,i)=>{
+    const ppa=p.ppa||0,total=p.totalPPA||0,usage=p.usage||0,plays=p.plays||0;
+    const bw=Math.round(Math.min(Math.abs(ppa)/maxPPA,1)*46);
+    const bc=ppa>=0?'#3ecf8e':'#e05252';
+    const isMy=p.team.toLowerCase()===myT;
+    let cv='';
+    if(showC){try{const fn=new Function('ppa','totalPPA','usage','passPPA','rushPPA','recvPPA','plays','return('+ac.formula+')');const rv=fn(ppa,total,usage,p.passPPA||0,p.rushPPA||0,p.recvPPA||0,plays);cv=isNaN(rv)?'err':rv.toFixed(3);}catch(e){cv='err';}}
+    return`<tr style="${isMy?'background:rgba(200,168,75,0.04)':''}">
+      <td style="color:var(--text3)">${i+1}</td>
+      <td style="font-weight:700">${p.name||'—'}</td>
+      <td><span class="badge b-pos">${p.position||'—'}</span></td>
+      <td><span class="${isMy?'badge b-team':''}" style="${isMy?'':'color:var(--text2)'}">${p.team||'—'}</span></td>
+      <td><div class="bar-wrap"><div class="bar-tr"><div class="bar-f" style="width:${bw}px;background:${bc};left:${ppa<0?46-bw:46}px"></div></div><span style="color:${bc};font-weight:700">${ppa.toFixed(3)}</span></div></td>
+      <td style="color:${(p.passPPA||0)>=0?'var(--green)':'var(--red)'}">${p.passPPA?p.passPPA.toFixed(3):'—'}</td>
+      <td style="color:${(p.rushPPA||0)>=0?'var(--green)':'var(--red)'}">${p.rushPPA?p.rushPPA.toFixed(3):'—'}</td>
+      <td style="color:${(p.recvPPA||0)>=0?'var(--green)':'var(--red)'}">${p.recvPPA?p.recvPPA.toFixed(3):'—'}</td>
+      <td>${(usage*100).toFixed(1)}%</td>
+      <td>${plays}</td>
+      <td style="font-weight:700;color:${total>=0?'var(--green)':'var(--red)'}">${total.toFixed(1)}</td>
+      ${showC?`<td style="font-weight:700;color:var(--gold)">${cv}</td>`:''}
+    </tr>`;
+  }).join('');
+  // Update summary cards
+  const myP=playerData.filter(p=>p.team.toLowerCase()===myT);
+  const g=document.getElementById('ppaMG');
+  if(!g)return;
+  const wins=gamesData.filter(g2=>{const t=getTeam();return g2.home_team===t?g2.home_points>g2.away_points:g2.away_team===t?g2.away_points>g2.home_points:false;}).length;
+  const losses=gamesData.filter(g2=>{const t=getTeam();return g2.home_team===t?g2.home_points<g2.away_points:g2.away_team===t?g2.away_points<g2.home_points:false;}).length;
+  const avgPPA=myP.length?(myP.reduce((a,p)=>a+(p.ppa||0),0)/myP.length):0;
+  const top1=[...myP].sort((a,b)=>(b.ppa||0)-(a.ppa||0))[0];
+  g.style.display='grid';
+  g.innerHTML=`<div class="mc gold"><div class="mc-l">Record</div><div class="mc-v">${wins}–${losses}</div><div class="mc-s">${getYear()}</div></div>
+    <div class="mc"><div class="mc-l">Avg PPA/play</div><div class="mc-v">${avgPPA.toFixed(3)}</div><div class="mc-s">${getTeam()}</div></div>
+    <div class="mc"><div class="mc-l">Tracked players</div><div class="mc-v">${myP.length}</div></div>
+    <div class="mc"><div class="mc-l">PPA leader</div><div class="mc-v" style="font-size:14px;padding-top:4px">${top1?top1.name:'—'}</div><div class="mc-s">${top1?top1.ppa.toFixed(3):''}</div></div>`;
+}
+
+function exportPPACSV(){
+  if(!playerData.length){toast('Load data first');return;}
+  const team=getTeam(),tf=document.getElementById('pTeam').value;
+  const data=tf==='focus'?playerData.filter(p=>p.team.toLowerCase()===team.toLowerCase()):playerData;
+  const rows=[['Name','Pos','Team','PPA/play','Pass PPA','Rush PPA','Recv PPA','Usage','Plays','Total PPA']];
+  data.forEach(p=>rows.push([p.name,p.position,p.team,(p.ppa||0).toFixed(3),(p.passPPA||0).toFixed(3),(p.rushPPA||0).toFixed(3),(p.recvPPA||0).toFixed(3),((p.usage||0)*100).toFixed(1)+'%',p.plays||0,(p.totalPPA||0).toFixed(1)]));
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download=team+'_ppa_'+getYear()+'.csv';a.click();toast('Exported');
+}
+
+// ═══════════════════════════════════════════════════
+// BOX STATS
+// ═══════════════════════════════════════════════════
+const BOX_COLS = {
+  passing:  ['player','team','completions','attempts','yards','touchdowns','interceptions','ypa'],
+  rushing:  ['player','team','carries','yards','touchdowns','ypc'],
+  receiving:['player','team','receptions','targets','yards','touchdowns','ypr'],
+  defensive:['player','team','total','solo','assists','sacks','tfl','pds','fumbles'],
+  interceptions:['player','team','interceptions','yards','touchdowns'],
+  fumbles:  ['player','team','fumbles','lost'],
+};
+const COL_LBL={player:'Player',team:'Team',completions:'CMP',attempts:'ATT',yards:'YDS',touchdowns:'TD',interceptions:'INT',ypa:'YPA',carries:'CAR',ypc:'YPC',receptions:'REC',targets:'TGT',ypr:'YPR',total:'TOT',solo:'SOLO',assists:'AST',sacks:'SACKS',tfl:'TFL',pds:'PD',fumbles:'FUM',lost:'LOST'};
+async function loadBoxStats(){
+  if(!cfbdKey()){toast('Enter CFBD API key');return;}
+  const cat=document.getElementById('bsCat').value;
+  const team=getTeam(),year=getYear();
+  const teamF=document.getElementById('bsTeam').value;
+  document.getElementById('bsLoading').style.display='block';
+  try{
+    const path=teamF==='focus'
+      ?'/stats/player/season?year='+year+'&team='+encodeURIComponent(team)+'&category='+cat
+      :'/stats/player/season?year='+year+'&category='+cat;
+    boxStatsRaw=await cfbdGet(path);
+    boxStatsCat=cat;
+    renderBoxStats();
+  }catch(e){toast('Box stats error: '+e.message);}
+  document.getElementById('bsLoading').style.display='none';
+}
+function renderBoxStats(){
+  const q=document.getElementById('bsQ').value.toLowerCase();
+  const cat=document.getElementById('bsCat').value;
+  const cols=BOX_COLS[cat]||['player','team','yards','touchdowns'];
+  let data=(boxStatsRaw||[]).filter(r=>!q||((r.player||r.name||'').toLowerCase().includes(q)||(r.team||'').toLowerCase().includes(q)));
+  const head=document.getElementById('bsHead');
+  const body=document.getElementById('bsBody');
+  const team=getTeam().toLowerCase();
+  head.innerHTML=cols.map(c=>`<th>${COL_LBL[c]||c}</th>`).join('');
+  if(!data.length){body.innerHTML='<tr><td colspan="'+cols.length+'"><div class="empty">No data</div></td></tr>';return;}
+  body.innerHTML=data.slice(0,200).map(r=>{
+    const isMy=(r.team||'').toLowerCase()===team;
+    return`<tr style="${isMy?'background:rgba(200,168,75,0.04)':''}">`+cols.map(c=>{
+      const v=r[c]??r[c.replace(/_([a-z])/g,(_,l)=>l.toUpperCase())]??'—';
+      if(c==='player')return`<td style="font-weight:700">${v}</td>`;
+      if(c==='team')return`<td><span class="${isMy?'badge b-team':''}" style="${isMy?'':'color:var(--text2);font-size:10px'}">${v}</span></td>`;
+      return`<td>${typeof v==='number'?v.toFixed(v%1===0?0:1):v}</td>`;
+    }).join('')+'</tr>';
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════
+// GAME LOG
+// ═══════════════════════════════════════════════════
+function populateGLPlayers(){
+  const sel=document.getElementById('glPlayer');
+  sel.innerHTML='<option value="">Select player…</option>';
+  Object.keys(gameLogData).sort().forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o);});
+}
+function renderGameLog(){
+  const name=document.getElementById('glPlayer').value;
+  const stat=document.getElementById('glStat').value;
+  const body=document.getElementById('glBody');
+  if(!name||!gameLogData[name]){body.innerHTML='<tr><td colspan="7"><div class="empty">Select a player</div></td></tr>';return;}
+  const rows=[...gameLogData[name]].sort((a,b)=>a.week-b.week);
+  const labels=rows.map(r=>'Wk '+r.week);
+  const vals=rows.map(r=>r[stat]||0);
+  // Weekly chart
+  if(glChartInst){glChartInst.destroy();glChartInst=null;}
+  const ctx=document.getElementById('glChart').getContext('2d');
+  glChartInst=new Chart(ctx,{type:'bar',data:{labels,datasets:[{label:stat,data:vals,backgroundColor:vals.map(v=>v>=0?'rgba(62,207,142,0.65)':'rgba(224,82,82,0.65)'),borderColor:vals.map(v=>v>=0?'#3ecf8e':'#e05252'),borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#49545f'},grid:{color:'rgba(255,255,255,0.03)'}},y:{ticks:{color:'#49545f'},grid:{color:'rgba(255,255,255,0.03)'}}}}});
+  // Cumulative
+  if(cumChartInst){cumChartInst.destroy();cumChartInst=null;}
+  const ctx2=document.getElementById('cumChart').getContext('2d');
+  let cum=0;const cumVals=vals.map(v=>{cum+=v;return cum;});
+  cumChartInst=new Chart(ctx2,{type:'line',data:{labels,datasets:[{label:'Cumulative PPA',data:cumVals,borderColor:'#c8a84b',backgroundColor:'rgba(200,168,75,0.08)',tension:.3,pointRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#49545f'},grid:{color:'rgba(255,255,255,0.03)'}},y:{ticks:{color:'#49545f'},grid:{color:'rgba(255,255,255,0.03)'}}}}});
+  // Table
+  body.innerHTML=rows.map(r=>`<tr>
+    <td>Wk ${r.week}</td><td>${r.opponent||'—'}</td>
+    <td style="color:${(r.ppa||0)>=0?'var(--green)':'var(--red)'};font-weight:700">${(r.ppa||0).toFixed(3)}</td>
+    <td style="color:${(r.passPPA||0)>=0?'var(--green)':'var(--red)'}">${r.passPPA!=null?r.passPPA.toFixed(3):'—'}</td>
+    <td style="color:${(r.rushPPA||0)>=0?'var(--green)':'var(--red)'}">${r.rushPPA!=null?r.rushPPA.toFixed(3):'—'}</td>
+    <td style="color:${(r.recvPPA||0)>=0?'var(--green)':'var(--red)'}">${r.recvPPA!=null?r.recvPPA.toFixed(3):'—'}</td>
+    <td>${((r.usage||0)*100).toFixed(1)}%</td>
+  </tr>`).join('');
+}
+
+// ═══════════════════════════════════════════════════
+// PORTAL RADAR
+// ═══════════════════════════════════════════════════
+function portalSort(col){ portalSortSt={col,dir:portalSortSt.col===col?portalSortSt.dir*-1:-1}; renderPortal(); }
+
+function renderPortal(){
+  const pos=document.getElementById('portalPos').value;
+  const conf=document.getElementById('portalConf').value;
+  const minPPA=+document.getElementById('portalMinPPA').value;
+  const minPlays=+document.getElementById('portalMinPlays').value;
+  const q=document.getElementById('portalQ').value.toLowerCase();
+  const team=getTeam().toLowerCase();
+  const myPlayers=new Set(playerData.filter(p=>p.team.toLowerCase()===team).map(p=>p.name.toLowerCase()));
+
+  // Portal targets = all D1 players NOT on focus team, with meaningful stats
+  let data=playerData.filter(p=>{
+    if(p.team.toLowerCase()===team)return false;
+    if(pos&&p.position!==pos)return false;
+    if((p.ppa||0)<minPPA)return false;
+    if((p.plays||0)<minPlays)return false;
+    if(q&&!p.name.toLowerCase().includes(q)&&!p.team.toLowerCase().includes(q))return false;
+    if(conf==='g5only'&&!G5_CONFS.includes(p.conference))return false;
+    if(conf==='p4only'&&!P4_CONFS.includes(p.conference))return false;
+    return true;
+  });
+
+  // Sort
+  const col=portalSortSt.col;const dir=portalSortSt.dir;
+  data.sort((a,b)=>dir*((b[col]||0)-(a[col]||0)));
+
+  // Realistic fit heuristic: prefer G5 players with PPA above G5 median, flag P4 as reaches
+  function fitLabel(p){
+    const isG5=G5_CONFS.includes(p.conference);
+    const ppa=p.ppa||0;
+    if(isG5&&ppa>0.3)return{label:'Strong fit',color:'var(--green)'};
+    if(isG5&&ppa>0.1)return{label:'Solid fit',color:'var(--blue)'};
+    if(!isG5&&ppa>0.3)return{label:'Reach — high value',color:'var(--amber)'};
+    if(!isG5&&ppa>0.1)return{label:'Reach — mid level',color:'var(--text2)'};
+    return{label:'Developmental',color:'var(--text3)'};
+  }
+
+  // Card grid (top 12)
+  const grid=document.getElementById('portalGrid');
+  const top12=data.slice(0,12);
+  if(!top12.length){grid.innerHTML='<div class="empty">No players match filters. Try relaxing thresholds.</div>';
+  }else{
+    grid.innerHTML=top12.map(p=>{
+      const fit=fitLabel(p);
+      const ppa=p.ppa||0,total=p.totalPPA||0,usage=p.usage||0,plays=p.plays||0;
+      const ac=customMetrics.find(m=>m.name===activeMetric);
+      let customScore='—';
+      if(ac){try{const fn=new Function('ppa','totalPPA','usage','passPPA','rushPPA','recvPPA','plays','return('+ac.formula+')');customScore=fn(ppa,total,usage,p.passPPA||0,p.rushPPA||0,p.recvPPA||0,plays).toFixed(3);}catch(e){}}
+      return`<div class="portal-card">
+        <div class="pc-top">
+          <div><div class="pc-name">${p.name}</div><div class="pc-meta">${p.position} · ${p.team} · ${p.conference}</div></div>
+          <span class="badge b-${p.conference&&P4_CONFS.includes(p.conference)?'new':'portal'}">${P4_CONFS.includes(p.conference)?'P4':'G5'}</span>
+        </div>
+        <div class="pc-stats">
+          <div class="pc-stat-item"><div class="lbl">PPA/play</div><div class="val" style="color:${ppa>=0?'var(--green)':'var(--red)'}">${ppa.toFixed(3)}</div></div>
+          <div class="pc-stat-item"><div class="lbl">Total PPA</div><div class="val" style="color:${total>=0?'var(--green)':'var(--red)'}">${total.toFixed(1)}</div></div>
+          <div class="pc-stat-item"><div class="lbl">Usage</div><div class="val">${(usage*100).toFixed(1)}%</div></div>
+          <div class="pc-stat-item"><div class="lbl">${ac?ac.name:'Plays'}</div><div class="val" style="color:var(--gold)">${ac?customScore:plays}</div></div>
+        </div>
+        <div class="pc-fit" style="color:${fit.color}">&#9650; ${fit.label}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Full table
+  const body=document.getElementById('portalBody');
+  if(!data.length){body.innerHTML='<tr><td colspan="9"><div class="empty">No results</div></td></tr>';return;}
+  body.innerHTML=data.slice(0,200).map(p=>{
+    const fit=fitLabel(p);
+    return`<tr>
+      <td style="font-weight:700">${p.name}</td>
+      <td><span class="badge b-pos">${p.position}</span></td>
+      <td style="font-size:10px">${p.team}</td>
+      <td style="font-size:10px;color:var(--text2)">${p.conference}</td>
+      <td style="color:${(p.ppa||0)>=0?'var(--green)':'var(--red)'};font-weight:700">${(p.ppa||0).toFixed(3)}</td>
+      <td style="color:${(p.totalPPA||0)>=0?'var(--green)':'var(--red)'}">${(p.totalPPA||0).toFixed(1)}</td>
+      <td>${((p.usage||0)*100).toFixed(1)}%</td>
+      <td>${p.plays||0}</td>
+      <td style="font-size:10px;color:${fit.color}">${fit.label}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function runPortalAI(){
+  if(!claudeKey()){toast('Enter Claude API key');return;}
+  const team=getTeam();
+  const myPlayers=playerData.filter(p=>p.team.toLowerCase()===team.toLowerCase()).slice(0,20);
+  const pos=document.getElementById('portalPos').value;
+  const targets=playerData.filter(p=>{
+    if(p.team.toLowerCase()===team.toLowerCase())return false;
+    if(pos&&p.position!==pos)return false;
+    return (p.ppa||0)>0.1&&(p.plays||0)>50;
+  }).sort((a,b)=>(b.ppa||0)-(a.ppa||0)).slice(0,20);
+  document.getElementById('portalAIBox').style.display='block';
+  const el=document.getElementById('portalAIText');
+  el.textContent='Analyzing…';
+  try{
+    const r=await fetch(ANT,{method:'POST',headers:{'Content-Type':'application/json','x-api-key':claudeKey(),'anthropic-version':'2023-06-01'},
+    body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1200,
+      system:'You are an elite college football analytics director identifying portal targets. Write in plain text, no markdown. Concise, data-driven, specific to MAC/G5 context.',
+      messages:[{role:'user',content:`Analyze portal acquisition opportunities for ${team}. Current roster PPA data: ${JSON.stringify(myPlayers)}. Potential targets by PPA: ${JSON.stringify(targets)}. For each top target: explain what specific gap they fill, why they are realistic for ${team}, and what their PPA profile suggests about their role fit. Focus on fly-under-the-radar G5 players who outperform their recruiting profiles.${pos?' Filter to '+pos+' only.':''}`}]})});
+    const d=await r.json();el.textContent=d.content?.[0]?.text||'No response.';
+  }catch(e){el.textContent='Error: '+e.message;}
+}
+
+// ═══════════════════════════════════════════════════
+// GAME PREP DOCUMENT
+// ═══════════════════════════════════════════════════
+async function buildGamePrep(){
+  const opp=document.getElementById('gpOpp').value.trim();
+  if(!opp){toast('Enter opponent name');return;}
+  if(!claudeKey()&&!cfbdKey()){toast('Enter API keys');return;}
+  const year=document.getElementById('gpYear').value;
+  const myTeam=getTeam();
+  document.getElementById('gpSp').style.display='inline-block';
+  const doc=document.getElementById('prepDoc');
+  doc.innerHTML='<div style="padding:40px;text-align:center;color:var(--text3)"><span class="sp" style="width:20px;height:20px;border-width:3px;margin-right:10px"></span>Fetching data and building game prep…</div>';
+
+  try{
+    // Fetch opponent players
+    let oppPlayers=playerData.filter(p=>p.team.toLowerCase()===opp.toLowerCase());
+    if(!oppPlayers.length){
+      const raw=await cfbdGet('/ppa/players/season?year='+year+'&team='+encodeURIComponent(opp)+'&excludeGarbageTime=true');
+      oppPlayers=(raw||[]).map(normPPA);
+    }
+
+    // Fetch opponent advanced team stats
+    let oppStats={};
+    try{
+      const raw=await cfbdGet('/stats/season/advanced?year='+year+'&team='+encodeURIComponent(opp));
+      oppStats=(raw||[])[0]||{};
+    }catch(e){}
+
+    // Fetch opponent box stats (passing + defensive)
+    let oppPass=[],oppDef=[];
+    try{
+      const [p,d]=await Promise.all([
+        cfbdGet('/stats/player/season?year='+year+'&team='+encodeURIComponent(opp)+'&category=passing'),
+        cfbdGet('/stats/player/season?year='+year+'&team='+encodeURIComponent(opp)+'&category=defensive'),
+      ]);
+      oppPass=p||[];oppDef=d||[];
+    }catch(e){}
+
+    const myPlayers=playerData.filter(p=>p.team.toLowerCase()===myTeam.toLowerCase());
+    const myOff=myPlayers.filter(p=>['QB','WR','RB','TE'].includes(p.position)).sort((a,b)=>(b.ppa||0)-(a.ppa||0));
+    const oppDef2=oppPlayers.filter(p=>['DB','LB','DL','CB','S'].includes(p.position)).sort((a,b)=>(b.ppa||0)-(a.ppa||0));
+    const oppOff=oppPlayers.filter(p=>['QB','WR','RB','TE'].includes(p.position)).sort((a,b)=>(b.ppa||0)-(a.ppa||0));
+    const myDef=myPlayers.filter(p=>['DB','LB','DL','CB','S'].includes(p.position)).sort((a,b)=>(b.ppa||0)-(a.ppa||0));
+
+    // Generate matchup pairings and AI narrative
+    let aiNarrative='';
+    if(claudeKey()){
+      const prompt=`You are a college football analyst writing a game prep document for ${myTeam} vs ${opp}.
+
+Our key offensive players (PPA data): ${JSON.stringify(myOff.slice(0,8))}
+Their key defensive players (PPA data): ${JSON.stringify(oppDef2.slice(0,8))}
+Their key offensive players (PPA data): ${JSON.stringify(oppOff.slice(0,8))}
+Our key defensive players (PPA data): ${JSON.stringify(myDef.slice(0,8))}
+Opponent advanced stats: ${JSON.stringify(oppStats)}
+Opponent passing box stats: ${JSON.stringify(oppPass.slice(0,3))}
+Opponent defensive box stats: ${JSON.stringify(oppDef.slice(0,5))}
+
+Write a game prep document with these sections:
+1. OPPONENT OVERVIEW: 2-3 sentences on their identity and what makes them dangerous.
+2. KEY MATCHUP ADVANTAGES FOR US: Identify 3 specific player-vs-player matchups where ${myTeam} has an advantage. Be specific — name players, cite stats, explain why (e.g. our slot WR ppa vs their nickelback efficiency). 
+3. KEY MATCHUP CONCERNS: 2 matchups where opponent has an edge. Name players and explain with data.
+4. OFFENSIVE GAME PLAN: 3 bullet points for what ${myTeam} should attack based on opponent defensive weaknesses.
+5. DEFENSIVE GAME PLAN: 3 bullet points for how ${myTeam} should defend their key threats.
+6. PERSONNEL NOTES: Any notable depth, usage trends, or injury concerns suggested by the data.
+
+Use plain text. No markdown. Separate sections with ALL CAPS headers. Be specific and data-driven.`;
+
+      const r=await fetch(ANT,{method:'POST',headers:{'Content-Type':'application/json','x-api-key':claudeKey(),'anthropic-version':'2023-06-01'},
+        body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1800,
+          system:'You are an elite college football analyst. Write in plain text only. No markdown symbols. Use section headers in ALL CAPS.',
+          messages:[{role:'user',content:prompt}]})});
+      const d=await r.json();
+      aiNarrative=d.content?.[0]?.text||'';
+    }
+
+    // Build the document HTML
+    const oppO=oppStats?.offense||{};
+    const oppD=oppStats?.defense||{};
+    const parseNarrative=(txt)=>{
+      if(!txt)return'<div style="color:var(--text3);font-size:12px">Add Claude API key to generate AI narrative analysis.</div>';
+      const sections=txt.split(/\n(?=[A-Z][A-Z ]{3,}:)/);
+      return sections.map(s=>{
+        const m=s.match(/^([A-Z][A-Z ]+):([\s\S]*)/);
+        if(!m)return`<p style="font-size:12px;line-height:1.7;color:var(--text2)">${s.trim()}</p>`;
+        return`<div style="margin-bottom:14px"><div style="font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--text3);margin-bottom:6px">${m[1]}</div><div style="font-size:12px;line-height:1.75;color:var(--text2)">${m[2].trim()}</div></div>`;
+      }).join('');
+    };
+
+    doc.innerHTML=`
+      <div class="prep-doc">
+        <div class="prep-header">
+          <div><div class="prep-opp">${myTeam} vs ${opp}</div><div class="prep-meta">${year} season · Generated ${new Date().toLocaleDateString()}</div></div>
+          <div style="display:flex;gap:10px">
+            <div style="text-align:right"><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">Opp off EPA</div><div style="font-size:16px;font-weight:700;color:${(oppO.ppa||0)>=0?'var(--red)':'var(--green)'}">${(oppO.ppa||0).toFixed(3)}</div></div>
+            <div style="text-align:right"><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">Opp def EPA</div><div style="font-size:16px;font-weight:700;color:${(oppD.ppa||0)<=0?'var(--red)':'var(--green)'}">${(oppD.ppa||0).toFixed(3)}</div></div>
+            <div style="text-align:right"><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">Havoc rate</div><div style="font-size:16px;font-weight:700">${((oppD.havoc?.total||0)*100).toFixed(1)}%</div></div>
+          </div>
+        </div>
+
+        <div class="matchup-section">
+          <div class="matchup-title">AI narrative analysis</div>
+          ${parseNarrative(aiNarrative)}
+        </div>
+
+        <div class="matchup-section">
+          <div class="matchup-title">Our offense vs their defense — key matchups</div>
+          ${myOff.slice(0,4).map((off,i)=>{
+            const def=oppDef2[i]||oppDef2[0];
+            const adv=(off.ppa||0)>(def?-1*(def.ppa||0):0);
+            return`<div class="matchup-card ${adv?'advantage':'neutral'}">
+              <div class="mc-players">
+                <div class="mc-player">
+                  <div class="mc-pname">${off.name}</div>
+                  <div class="mc-pmeta">${off.position} · ${myTeam}</div>
+                  <div class="mc-stats">
+                    <div class="mc-stat">PPA <strong style="color:${(off.ppa||0)>=0?'var(--green)':'var(--red)'}">${(off.ppa||0).toFixed(3)}</strong></div>
+                    <div class="mc-stat">Usage <strong>${((off.usage||0)*100).toFixed(0)}%</strong></div>
+                    <div class="mc-stat">Tot PPA <strong>${(off.totalPPA||0).toFixed(1)}</strong></div>
+                  </div>
+                </div>
+                <div class="mc-vs">vs</div>
+                <div class="mc-player" style="text-align:right">
+                  ${def?`<div class="mc-pname">${def.name}</div>
+                  <div class="mc-pmeta">${def.position} · ${opp}</div>
+                  <div class="mc-stats" style="justify-content:flex-end">
+                    <div class="mc-stat">PPA <strong style="color:${(def.ppa||0)<=0?'var(--green)':'var(--red)'}">${(def.ppa||0).toFixed(3)}</strong></div>
+                    <div class="mc-stat">Usage <strong>${((def.usage||0)*100).toFixed(0)}%</strong></div>
+                  </div>`:'<div class="mc-pmeta" style="color:var(--text3)">No matching defender data</div>'}
+                </div>
+              </div>
+              <div class="mc-insight">${adv?'&#9650; Potential advantage':'&#9660; Watch this matchup'} — ${off.name} (${(off.ppa||0).toFixed(3)} PPA) ${adv?'outperforms':'vs'} ${def?def.name+' ('+((def.ppa||0).toFixed(3))+' def PPA)':'opponent secondary'}</div>
+            </div>`;
+          }).join('')}
+        </div>
+
+        <div class="matchup-section">
+          <div class="matchup-title">Their offense vs our defense — threats to contain</div>
+          ${oppOff.slice(0,4).map((off,i)=>{
+            const def=myDef[i]||myDef[0];
+            const danger=(off.ppa||0)>0.15;
+            return`<div class="matchup-card ${danger?'disadvantage':'neutral'}">
+              <div class="mc-players">
+                <div class="mc-player">
+                  <div class="mc-pname">${off.name}</div>
+                  <div class="mc-pmeta">${off.position} · ${opp}</div>
+                  <div class="mc-stats">
+                    <div class="mc-stat">PPA <strong style="color:${(off.ppa||0)>=0?'var(--red)':'var(--green)'}">${(off.ppa||0).toFixed(3)}</strong></div>
+                    <div class="mc-stat">Usage <strong>${((off.usage||0)*100).toFixed(0)}%</strong></div>
+                    <div class="mc-stat">Tot PPA <strong>${(off.totalPPA||0).toFixed(1)}</strong></div>
+                  </div>
+                </div>
+                <div class="mc-vs">vs</div>
+                <div class="mc-player" style="text-align:right">
+                  ${def?`<div class="mc-pname">${def.name}</div>
+                  <div class="mc-pmeta">${def.position} · ${myTeam}</div>
+                  <div class="mc-stats" style="justify-content:flex-end">
+                    <div class="mc-stat">PPA <strong style="color:${(def.ppa||0)<=0?'var(--green)':'var(--red)'}">${(def.ppa||0).toFixed(3)}</strong></div>
+                    <div class="mc-stat">Plays <strong>${def.plays||0}</strong></div>
+                  </div>`:'<div class="mc-pmeta" style="color:var(--text3)">No matching defender data</div>'}
+                </div>
+              </div>
+              <div class="mc-insight">${danger?'&#9888; Priority contain':'Monitor'} — ${off.name} generating ${(off.ppa||0).toFixed(3)} PPA/play with ${((off.usage||0)*100).toFixed(0)}% usage</div>
+            </div>`;
+          }).join('')}
+        </div>
+
+        <div class="matchup-section">
+          <div class="matchup-title">Opponent player PPA — full list</div>
+          <table style="font-size:11px;width:100%;border-collapse:collapse">
+            <thead style="background:var(--surface2)"><tr><th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;color:var(--text3)">Player</th><th>Pos</th><th>PPA</th><th>Usage</th><th>Tot PPA</th></tr></thead>
+            <tbody>${oppPlayers.sort((a,b)=>(b.ppa||0)-(a.ppa||0)).slice(0,15).map(p=>`<tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:6px 8px;font-weight:600">${p.name}</td>
+              <td style="padding:6px 8px"><span class="badge b-pos">${p.position}</span></td>
+              <td style="padding:6px 8px;color:${(p.ppa||0)>=0?'var(--red)':'var(--green)'};font-weight:700">${(p.ppa||0).toFixed(3)}</td>
+              <td style="padding:6px 8px">${((p.usage||0)*100).toFixed(1)}%</td>
+              <td style="padding:6px 8px;color:${(p.totalPPA||0)>=0?'var(--red)':'var(--green)'}">${(p.totalPPA||0).toFixed(1)}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }catch(e){ doc.innerHTML='<div class="empty">Error: '+e.message+'</div>'; }
+  document.getElementById('gpSp').style.display='none';
+}
+
+function printPrep(){
+  const content=document.getElementById('prepDoc').innerHTML;
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>Game Prep</title><style>
+    body{font-family:sans-serif;font-size:12px;color:#111;background:#fff;padding:20px}
+    .prep-doc{border:1px solid #ccc;border-radius:8px;overflow:hidden}
+    .prep-header{background:#f5f5f5;padding:14px 18px;display:flex;justify-content:space-between;border-bottom:1px solid #ddd}
+    .prep-opp{font-size:18px;font-weight:700}.prep-meta{font-size:11px;color:#666;margin-top:3px}
+    .matchup-section{padding:14px 18px;border-bottom:1px solid #eee}
+    .matchup-title{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#888;margin-bottom:10px}
+    .matchup-card{background:#f9f9f9;border-radius:6px;padding:10px 12px;margin-bottom:8px;border-left:3px solid #ccc}
+    .matchup-card.advantage{border-left-color:#16a34a}.matchup-card.disadvantage{border-left-color:#dc2626}
+    .mc-players{display:flex;justify-content:space-between;margin-bottom:6px}
+    .mc-pname{font-weight:700;font-size:12px}.mc-pmeta{font-size:10px;color:#666}
+    .mc-stats{display:flex;gap:10px;margin-top:4px}.mc-stat{font-size:10px;color:#888}
+    .mc-insight{font-size:11px;color:#555;border-top:1px solid #eee;padding-top:6px;margin-top:6px}
+    table{width:100%;border-collapse:collapse}th,td{padding:6px 8px;text-align:left;border-bottom:1px solid #eee}
+    th{font-size:9px;font-weight:700;text-transform:uppercase;color:#888;background:#f5f5f5}
+    @media print{body{padding:0}button{display:none}}
+  </style></head><body>${content}<br><button onclick="window.print()">Print</button></body></html>`);
+  w.document.close();
+}
+
+// ═══════════════════════════════════════════════════
+// MAC COMPARE
+// ═══════════════════════════════════════════════════
+function getNestedVal(obj,path){ return path.split('.').reduce((o,k)=>o&&o[k]!==undefined?o[k]:null,obj); }
+
+async function loadMac(){
+  if(!cfbdKey())return;
+  const conf=document.getElementById('macConf').value;
+  try{
+    const raw=await cfbdGet('/stats/season/advanced?year='+getYear()+'&conference='+encodeURIComponent(conf));
+    macData=raw||[];macLoaded=true;renderMac();
+  }catch(e){toast('MAC load error');}
+}
+
+function renderMac(){
+  if(!macData.length)return;
+  const metric=document.getElementById('macMetric').value;
+  const focus=getTeam().toLowerCase();
+  const pairs=macData.map(d=>({team:d.team,val:getNestedVal(d,metric)||0,full:d})).sort((a,b)=>b.val-a.val);
+  if(macChartInst){macChartInst.destroy();macChartInst=null;}
+  const ctx=document.getElementById('macChart').getContext('2d');
+  macChartInst=new Chart(ctx,{type:'bar',data:{labels:pairs.map(p=>p.team),datasets:[{label:metric,data:pairs.map(p=>p.val),backgroundColor:pairs.map(p=>p.team.toLowerCase()===focus?'rgba(200,168,75,0.8)':'rgba(74,158,255,0.4)'),borderColor:pairs.map(p=>p.team.toLowerCase()===focus?'#c8a84b':'#4a9eff'),borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#49545f',maxRotation:45},grid:{color:'rgba(255,255,255,0.03)'}},y:{ticks:{color:'#49545f'},grid:{color:'rgba(255,255,255,0.03)'}}}}});
+  const body=document.getElementById('macBody');
+  body.innerHTML=pairs.map((p,i)=>{
+    const isMy=p.team.toLowerCase()===focus;
+    const d=p.full;
+    return`<tr style="${isMy?'background:rgba(200,168,75,0.05);font-weight:600':''}">
+      <td>${i+1}</td>
+      <td>${isMy?`<span class="badge b-team">${p.team}</span>`:p.team}</td>
+      <td style="color:${(getNestedVal(d,'offense.ppa')||0)>=0?'var(--green)':'var(--red)'}">${(getNestedVal(d,'offense.ppa')||0).toFixed(3)}</td>
+      <td style="color:${(getNestedVal(d,'defense.ppa')||0)<=0?'var(--green)':'var(--red)'}">${(getNestedVal(d,'defense.ppa')||0).toFixed(3)}</td>
+      <td>${((getNestedVal(d,'offense.successRate')||0)*100).toFixed(1)}%</td>
+      <td>${(getNestedVal(d,'offense.explosiveness')||0).toFixed(3)}</td>
+      <td>${((getNestedVal(d,'defense.havoc.total')||0)*100).toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════
+// CUSTOM METRICS
+// ═══════════════════════════════════════════════════
+function saveMetric(){
+  const name=document.getElementById('mName').value.trim();
+  const formula=document.getElementById('mFormula').value.trim();
+  const pos=document.getElementById('mPos').value;
+  const scope=document.getElementById('mScope').value;
+  if(!name||!formula){toast('Name and formula required');return;}
+  try{const fn=new Function('ppa','totalPPA','usage','passPPA','rushPPA','recvPPA','plays','return('+formula+')');fn(.1,5,.2,.1,.05,.08,20);}
+  catch(e){toast('Formula error: '+e.message);return;}
+  const i=customMetrics.findIndex(m=>m.name===name);
+  const m={name,formula,pos,scope};
+  if(i>=0)customMetrics[i]=m;else customMetrics.push(m);
+  localStorage.setItem('cfbd_metrics_v2',JSON.stringify(customMetrics));
+  renderSavedMetrics();toast('Saved: '+name);
+}
+function deleteMetric(name){
+  customMetrics=customMetrics.filter(m=>m.name!==name);
+  if(activeMetric===name)activeMetric=null;
+  localStorage.setItem('cfbd_metrics_v2',JSON.stringify(customMetrics));
+  renderSavedMetrics();renderLB();
+}
+function setActiveMetric(name){
+  activeMetric=name;
+  document.getElementById('lbMetric').value=name;
+  document.getElementById('customColHead').textContent=name;
+  document.getElementById('customColHead').style.display='';
+  renderPlayers();renderPortal();renderLB();toast('Active: '+name);
+}
+function renderSavedMetrics(){
+  const c=document.getElementById('savedMetricsList');
+  const sel=document.getElementById('lbMetric');
+  sel.innerHTML='<option value="">Select metric…</option>';
+  customMetrics.forEach(m=>{const o=document.createElement('option');o.value=m.name;o.textContent=m.name;sel.appendChild(o);});
+  if(!customMetrics.length){c.innerHTML='<div style="color:var(--text3);font-size:11px;margin-bottom:10px">No saved metrics yet</div>';return;}
+  c.innerHTML=customMetrics.map(m=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px">
+    <div><div style="font-weight:700;font-size:12px">${m.name}${m.pos?' <span style="color:var(--text3)">· '+m.pos+'</span>':''} <span style="font-size:9px;color:var(--text3)">${m.scope}</span></div>
+    <div style="font-family:monospace;font-size:10px;color:var(--text2);margin-top:2px">${m.formula}</div></div>
+    <div style="display:flex;gap:4px">
+      <button class="btn btn-g btn-sm" onclick="setActiveMetric('${m.name.replace(/'/g,"\\'")}')">Use</button>
+      <button class="btn btn-g btn-sm" onclick="deleteMetric('${m.name.replace(/'/g,"\\'")}')">Del</button>
+    </div>
+  </div>`).join('');
+}
+function renderLB(){
+  const mName=document.getElementById('lbMetric').value;
+  const pos=document.getElementById('lbPos').value;
+  const scope=document.getElementById('lbScope').value;
+  const m=customMetrics.find(c=>c.name===mName);
+  const body=document.getElementById('lbBody');
+  if(!m||!playerData.length){body.innerHTML='<tr><td colspan="8"><div class="empty">Select a metric and load data</div></td></tr>';return;}
+  document.getElementById('lbScoreHead').textContent=m.name;
+  const team=getTeam().toLowerCase();
+  let data=playerData.filter(p=>{
+    if(pos&&p.position!==pos)return false;
+    if(m.pos&&p.position!==m.pos)return false;
+    if(scope==='focus'&&p.team.toLowerCase()!==team)return false;
+    return true;
+  });
+  const scored=data.map(p=>{
+    const ppa=p.ppa||0,total=p.totalPPA||0,usage=p.usage||0;
+    try{const fn=new Function('ppa','totalPPA','usage','passPPA','rushPPA','recvPPA','plays','return('+m.formula+')');
+      const s=fn(ppa,total,usage,p.passPPA||0,p.rushPPA||0,p.recvPPA||0,p.plays||0);
+      return {...p,score:isNaN(s)?null:s};}
+    catch(e){return {...p,score:null};}
+  }).filter(p=>p.score!=null).sort((a,b)=>b.score-a.score);
+  body.innerHTML=scored.slice(0,50).map((p,i)=>`<tr>
+    <td style="color:var(--text3)">${i+1}</td>
+    <td style="font-weight:700">${p.name}</td>
+    <td><span class="badge b-pos">${p.position}</span></td>
+    <td style="font-size:10px;color:var(--text2)">${p.team}</td>
+    <td style="font-weight:800;color:var(--gold)">${p.score.toFixed(3)}</td>
+    <td style="color:${(p.ppa||0)>=0?'var(--green)':'var(--red)'}">${(p.ppa||0).toFixed(3)}</td>
+    <td>${((p.usage||0)*100).toFixed(1)}%</td>
+    <td>${p.plays||0}</td>
+  </tr>`).join('');
+}
+
+// ═══════════════════════════════════════════════════
+// AI ANALYSIS
+// ═══════════════════════════════════════════════════
+const AI_PROMPTS={
+  top5:(t,d)=>`Identify and evaluate the top 5 players on ${t} by PPA efficiency. For each: explain what they contribute, their usage trend, and their value for revenue sharing. Data: ${JSON.stringify(d.slice(0,30))}`,
+  qb:(t,d)=>`Evaluate the QBs on ${t} in detail. Assess passing PPA, usage, consistency, and compare to MAC norms (good MAC QB PPA ~0.15-0.25). Data: ${JSON.stringify(d.filter(p=>p.position==='QB'))}`,
+  wr:(t,d)=>`Evaluate ${t}'s receiving corps. Rank WRs and TEs by recv PPA and usage. Identify the clear target leader and any depth concerns. Data: ${JSON.stringify(d.filter(p=>['WR','TE'].includes(p.position)))}`,
+  rb:(t,d)=>`Evaluate ${t}'s run game and RBs. Assess rush PPA, usage split, and whether the run game is generating positive EPA. Data: ${JSON.stringify(d.filter(p=>p.position==='RB'))}`,
+  defense:(t,d)=>`Evaluate ${t}'s defense by PPA. Note any positions where they are bleeding EPA (positive opp PPA = weakness). Data: ${JSON.stringify(d.filter(p=>['DB','LB','DL','CB','S'].includes(p.position)))}`,
+  needs:(t,d,g)=>`Based on ${t}'s PPA data, identify the 3 biggest roster gaps. Recommend position priorities for the transfer portal and explain the production thresholds needed. Data: ${JSON.stringify(d.slice(0,40))}`,
+  portal:(t,d,g)=>`Identify top 8 portal targets for ${t} from this list of non-${t} players. Prioritize G5 players who outperform their profile (PPA > 0.2, plays > 80). Explain why each fits. Data: ${JSON.stringify(d.filter(p=>p.team.toLowerCase()!==t.toLowerCase()&&(p.ppa||0)>0.1&&(p.plays||0)>50).sort((a,b)=>(b.ppa||0)-(a.ppa||0)).slice(0,30))}`,
+  revshare:(t,d)=>`Evaluate revenue share ROI for ${t}'s roster. Tier players by production value (PPA × usage × position weight). Identify who is outperforming likely compensation and who may be underperforming. Use plain text tiers. Data: ${JSON.stringify(d.slice(0,25))}`,
+  trajectory:(t,d)=>`Analyze ${t}'s season trajectory based on cumulative PPA data. Is the team trending up or down? Which players are showing improvement vs decline? Data: ${JSON.stringify(d.slice(0,30))}`,
+};
+async function runAI(type){
+  const team=getTeam();
+  const myP=playerData.filter(p=>p.team.toLowerCase()===team.toLowerCase()).slice(0,40);
+  if(!myP.length){toast('Load data first');return;}
+  if(!claudeKey()){toast('Enter Claude API key');return;}
+  const el=document.getElementById('aiText'),sp=document.getElementById('aiSp');
+  el.textContent='';sp.style.display='inline-block';
+  const promptFn=AI_PROMPTS[type];
+  const prompt=promptFn(team,myP,gamesData);
+  try{
+    const r=await fetch(ANT,{method:'POST',headers:{'Content-Type':'application/json','x-api-key':claudeKey(),'anthropic-version':'2023-06-01'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1200,
+        system:'You are a college football analytics expert. Plain text only. No markdown symbols. Line breaks between sections.',
+        messages:[{role:'user',content:prompt}]})});
+    const d=await r.json();el.textContent=d.content?.[0]?.text||'No response.';
+  }catch(e){el.textContent='Error: '+e.message;}
+  sp.style.display='none';
+}
+async function runCustomAI(){
+  const q=document.getElementById('aiQ').value.trim();
+  if(!q){toast('Enter a question');return;}
+  if(!claudeKey()){toast('Enter Claude API key');return;}
+  const team=getTeam();
+  const myP=playerData.filter(p=>p.team.toLowerCase()===team.toLowerCase()).slice(0,40);
+  const el=document.getElementById('aiText'),sp=document.getElementById('aiSp');
+  el.textContent='';sp.style.display='inline-block';
+  try{
+    const r=await fetch(ANT,{method:'POST',headers:{'Content-Type':'application/json','x-api-key':claudeKey(),'anthropic-version':'2023-06-01'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1200,
+        system:`You are a college football analytics expert for ${team}. Answer using PPA/EPA data. Plain text only. Roster PPA context: ${JSON.stringify(myP)}`,
+        messages:[{role:'user',content:q}]})});
+    const d=await r.json();el.textContent=d.content?.[0]?.text||'No response.';
+  }catch(e){el.textContent='Error: '+e.message;}
+  sp.style.display='none';
+  document.getElementById('aiQ').value='';
+}
+
+// ═══════════════════════════════════════════════════
+// SCHEDULE
+// ═══════════════════════════════════════════════════
+function renderGames(){
+  const team=getTeam();
+  if(!gamesData.length){document.getElementById('gamesGrid').innerHTML='<div class="empty">Load data to see schedule</div>';return;}
+  const sorted=[...gamesData].sort((a,b)=>a.week-b.week);
+  const done=sorted.filter(g=>g.home_points!=null);
+  const wins=done.filter(g=>g.home_team===team?g.home_points>g.away_points:g.away_points>g.home_points).length;
+  const losses=done.length-wins;
+  const ppf=done.length?done.reduce((s,g)=>s+(g.home_team===team?g.home_points:g.away_points),0)/done.length:0;
+  const ppa=done.length?done.reduce((s,g)=>s+(g.home_team===team?g.away_points:g.home_points),0)/done.length:0;
+  const g=document.getElementById('gamesMG');
+  g.style.display='grid';
+  g.innerHTML=`<div class="mc gold"><div class="mc-l">Record</div><div class="mc-v">${wins}–${losses}</div></div>
+    <div class="mc"><div class="mc-l">Avg scored</div><div class="mc-v">${ppf.toFixed(1)}</div></div>
+    <div class="mc"><div class="mc-l">Avg allowed</div><div class="mc-v">${ppa.toFixed(1)}</div></div>
+    <div class="mc"><div class="mc-l">Pt diff</div><div class="mc-v" style="color:${ppf>ppa?'var(--green)':'var(--red)'}">${ppf>ppa?'+':''}${(ppf-ppa).toFixed(1)}</div></div>`;
+  document.getElementById('gamesGrid').innerHTML=sorted.map(g=>{
+    const home=g.home_team===team,opp=home?g.away_team:g.home_team;
+    const myPts=home?g.home_points:g.away_points,oppPts=home?g.away_points:g.home_points;
+    const fin=myPts!=null,win=fin&&myPts>oppPts;
+    return`<div style="background:var(--surface);border:1px solid ${fin?(win?'rgba(62,207,142,.25)':'rgba(224,82,82,.2)'):'var(--border)'};border-left:3px solid ${fin?(win?'var(--green)':'var(--red)'):'var(--border)'};border-radius:var(--rl);padding:10px 13px;display:flex;justify-content:space-between;align-items:center">
+      <div><div style="font-weight:700;font-size:12px">Wk ${g.week}: ${home?'vs':'@'} ${opp}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">${g.conference_game?'MAC':'Non-conf'}</div></div>
+      <div style="text-align:right">${fin?`<div style="font-size:14px;font-weight:800;color:${win?'var(--green)':'var(--red)'}">${win?'W':'L'} ${myPts}–${oppPts}</div>`:'<span class="badge" style="background:var(--surface3);color:var(--text3)">Upcoming</span>'}</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════
+loadCfg();
+renderSavedMetrics();
+</script>
+</body>
+</html>
