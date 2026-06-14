@@ -627,10 +627,28 @@ async function loadRoster(){
   document.getElementById('rosterSp').style.display='inline-block';
   setStatus('ld','Loading roster…');
   try{
-    const rawRoster = await cfbdGet('/roster?team='+encodeURIComponent(team)+'&year=2026');
-    rosterData = (rawRoster||[]).map(normRosterRow);
+    // Try 2026, fall back to 2025 then 2024 — CFBD often doesn't have upcoming year until fall camp
+    let rawRoster=[], rosterYear=2026;
+    for(const yr of [2026,2025,2024]){
+      try{
+        const r = await cfbdGet('/roster?team='+encodeURIComponent(team)+'&year='+yr);
+        console.log('Roster yr '+yr+': '+(r||[]).length+' players', r&&r[0]?r[0]:'(empty)');
+        if(r&&r.length>0){ rawRoster=r; rosterYear=yr; break; }
+      }catch(e){ console.warn('Roster '+yr+' error:',e.message); }
+    }
 
-    // Need 2025 PPA for stats — re-use playerData if loaded for 2025, else fetch
+    if(!rawRoster.length){
+      // Log what the API actually returns to diagnose
+      console.warn('All roster years empty for team: "'+team+'". Check exact CFBD team name.');
+      toast('No roster data found. Check team name spelling.');
+      setStatus('err','Roster empty — check team name');
+      document.getElementById('rosterSp').style.display='none';
+      return;
+    }
+
+    rosterData = rawRoster.map(normRosterRow);
+
+    // Always load 2025 PPA for stats (most recent complete season)
     let ppa25 = playerData.length && getYear()==='2025' ? playerData : [];
     if(!ppa25.length){
       const rp = await cfbdGet('/ppa/players/season?year=2025&excludeGarbageTime=true');
@@ -641,18 +659,42 @@ async function loadRoster(){
       if(p.athleteId) rosterPPAById[p.athleteId]=p;
       rosterPPAByName[p.name.toLowerCase().trim()]=p;
     });
+    console.log('PPA map built: '+Object.keys(rosterPPAById).length+' by ID, '+Object.keys(rosterPPAByName).length+' by name');
+    console.log('Sample roster row:', rosterData[0]);
+    console.log('Sample PPA row:', ppa25[0]);
 
     renderRoster();
     renderRosterSummary();
-    setStatus('ok','Roster loaded — '+rosterData.length+' players');
-    toast('2026 roster loaded');
-  }catch(e){ setStatus('err',e.message.slice(0,50)); toast('Roster error: '+e.message.slice(0,80)); }
+    const matched=rosterData.filter(p=>getRPPA(p)).length;
+    setStatus('ok',rosterYear+' roster: '+rosterData.length+' players ('+matched+' with 2025 stats)');
+    toast(rosterYear+' roster loaded — '+rosterData.length+' players');
+  }catch(e){ setStatus('err',e.message.slice(0,50)); toast('Roster error: '+e.message.slice(0,80)); console.error(e); }
   document.getElementById('rosterSp').style.display='none';
 }
 
 function getRPPA(p){
+  // 1. Athlete ID match (most reliable)
   if(p.athleteId&&rosterPPAById[p.athleteId]) return rosterPPAById[p.athleteId];
-  return rosterPPAByName[p.name.toLowerCase().trim()]||null;
+  // 2. Exact full name match
+  const nameKey=p.name.toLowerCase().trim();
+  if(rosterPPAByName[nameKey]) return rosterPPAByName[nameKey];
+  // 3. Last name + position fuzzy (handles middle name / suffix differences)
+  const last=p.lastName.toLowerCase().trim();
+  const pos=p.position;
+  const fuzzy=Object.values(rosterPPAById).find(x=>
+    x.position===pos && x.name.toLowerCase().split(' ').pop()===last
+  );
+  if(fuzzy) return fuzzy;
+  // 4. First initial + last name match
+  const firstInit=(p.firstName||'')[0]?.toLowerCase();
+  if(firstInit){
+    const match=Object.values(rosterPPAById).find(x=>{
+      const parts=x.name.toLowerCase().split(' ');
+      return x.position===pos && parts[0][0]===firstInit && parts[parts.length-1]===last;
+    });
+    if(match) return match;
+  }
+  return null;
 }
 
 // Revenue share tier logic (simple heuristic based on PPA + position value)
