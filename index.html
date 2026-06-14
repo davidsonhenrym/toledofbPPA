@@ -214,17 +214,25 @@ code{background:var(--surface3);border-radius:3px;padding:1px 5px;font-family:mo
     <button class="btn btn-g btn-sm" onclick="exportRosterCSV()">Export CSV</button>
     <button class="btn btn-sm" onclick="loadRoster()"><span id="rosterSp" style="display:none" class="sp"></span> Load roster</button>
   </div>
+  <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.8">
+    Columns are position-adaptive &mdash;
+    <span style="color:var(--gold)">&#9670; QB/RB/WR/TE</span>: PPA · Pass · Rush · Usage · Plays · Tot PPA &nbsp;&nbsp;
+    <span style="color:var(--blue)">&#9670; DL/LB</span>: Tackles · Sacks · TFL · PBUs &nbsp;&nbsp;
+    <span style="color:var(--green)">&#9670; DB</span>: Tackles · INTs · PBUs &nbsp;&nbsp;
+    <span style="color:var(--text3)">&#9670; OL</span>: PFF upload coming &nbsp;&nbsp;
+    Transfers <span style="color:var(--amber)">↑XFER</span> &nbsp; Dim = no 2025 data
+  </div>
   <div class="tw">
     <table>
       <thead><tr>
         <th>#</th><th>Name</th><th>Pos</th><th>Yr</th><th>Ht</th><th>Wt</th><th>Hometown</th>
         <th>Prev school</th>
-        <th onclick="rSort2('ppa')" title="2025 PPA/play">2025 PPA</th>
-        <th onclick="rSort2('passPPA')">Pass</th>
-        <th onclick="rSort2('rushPPA')">Rush</th>
-        <th onclick="rSort2('usage')">Usage</th>
-        <th onclick="rSort2('plays')">Plays</th>
-        <th onclick="rSort2('totalPPA')">Tot PPA</th>
+        <th onclick="rSort2('ppa')" title="QB/RB/WR/TE: PPA/play | DL/LB: Tackles | DB: Tackles">Stat 1</th>
+        <th title="QB/RB/WR/TE: Pass PPA | DL/LB: Sacks | DB: INTs">Stat 2</th>
+        <th title="QB/RB/WR/TE: Rush PPA | DL/LB: TFL | DB: PBUs">Stat 3</th>
+        <th onclick="rSort2('usage')" title="QB/RB/WR/TE: Usage% | DL/LB: PBUs">Stat 4</th>
+        <th onclick="rSort2('plays')" title="QB/RB/WR/TE: Plays">Stat 5</th>
+        <th onclick="rSort2('totalPPA')" title="QB/RB/WR/TE: Total PPA">Stat 6</th>
         <th>Rev share tier</th>
       </tr></thead>
       <tbody id="rosterBody"><tr><td colspan="15"><div class="empty">Click "Load roster" to fetch 2026 Toledo roster with 2025 stats</div></td></tr></tbody>
@@ -566,16 +574,36 @@ async function loadCore(){
     gamesData    = games||[];
     teamStatsData= stats||[];
 
-    // Usage merge
+    // Usage merge — try selected year first, fall back to prior completed season
+    // CFBD usage only exists for completed/in-progress seasons
     try{
-      const uRaw = await cfbdGet('/player/usage?year='+year+'&excludeGarbageTime=true');
+      const currentMonth = new Date().getMonth(); // 0=Jan, 7=Aug
+      const selectedYear = +year;
+      // Season is considered "in progress or complete" if it's Aug+ of that year,
+      // or any time after. If selected year is current calendar year and before Aug,
+      // the season hasn't started — use prior year instead.
+      const currentCalYear = new Date().getFullYear();
+      const seasonLikelyStarted = selectedYear < currentCalYear || 
+                                   (selectedYear === currentCalYear && currentMonth >= 7);
+      const usageYear = seasonLikelyStarted ? selectedYear : selectedYear - 1;
+      
+      const uRaw = await cfbdGet('/player/usage?year='+usageYear+'&excludeGarbageTime=true');
       const uMap={};
       (uRaw||[]).forEach(u=>{
         const id=String(u.athlete_id||u.athleteId||'');
-        if(id) uMap[id]=+u.usage||0;
+        const name=(u.name||u.player||'').toLowerCase().trim();
+        const val=+(u.usage||u.usage?.overall||0);
+        if(id) uMap['id:'+id]=val;
+        if(name) uMap['name:'+name]=val;
       });
-      playerData.forEach(p=>{ if(uMap[p.athleteId]&&!p.usage) p.usage=uMap[p.athleteId]; });
-    }catch(e){}
+      playerData.forEach(p=>{
+        const byId  = p.athleteId ? uMap['id:'+p.athleteId] : null;
+        const byName= uMap['name:'+p.name.toLowerCase().trim()];
+        if(!p.usage || p.usage===0) p.usage = byId||byName||0;
+      });
+      const usageCount = playerData.filter(p=>p.usage>0).length;
+      console.log('Usage loaded from '+usageYear+': '+usageCount+' players with usage data');
+    }catch(e){ console.warn('Usage fetch failed:', e.message); }
 
     // Game log for focus team
     try{
@@ -603,7 +631,7 @@ async function loadCore(){
 // ═══════════════════════════════════════════════════
 // ROSTER
 // ═══════════════════════════════════════════════════
-let rosterPPAById={}, rosterPPAByName={};
+let rosterPPAById={}, rosterPPAByName={}, rosterBoxStats={};
 function normRosterRow(r){
   return {
     athleteId: String(r.athlete_id||r.athleteId||r.id||''),
@@ -660,8 +688,25 @@ async function loadRoster(){
       rosterPPAByName[p.name.toLowerCase().trim()]=p;
     });
     console.log('PPA map built: '+Object.keys(rosterPPAById).length+' by ID, '+Object.keys(rosterPPAByName).length+' by name');
-    console.log('Sample roster row:', rosterData[0]);
-    console.log('Sample PPA row:', ppa25[0]);
+
+    // Fetch box stats for non-skill positions (defensive + fumbles categories)
+    rosterBoxStats = {};
+    try{
+      const [defRaw, intRaw] = await Promise.all([
+        cfbdGet('/stats/player/season?year=2025&team='+encodeURIComponent(team)+'&category=defensive'),
+        cfbdGet('/stats/player/season?year=2025&team='+encodeURIComponent(team)+'&category=interceptions'),
+      ]);
+      // Index by lowercase name
+      (defRaw||[]).forEach(r=>{
+        const k=(r.player||r.name||'').toLowerCase().trim();
+        if(k) rosterBoxStats[k]={...(rosterBoxStats[k]||{}), ...r, _def:true};
+      });
+      (intRaw||[]).forEach(r=>{
+        const k=(r.player||r.name||'').toLowerCase().trim();
+        if(k) rosterBoxStats[k]={...(rosterBoxStats[k]||{}), ...r, _int:true};
+      });
+      console.log('Box stats loaded for', Object.keys(rosterBoxStats).length, 'players');
+    }catch(e){ console.warn('Box stats fetch failed (non-fatal):', e.message); }
 
     renderRoster();
     renderRosterSummary();
@@ -726,6 +771,90 @@ function renderRosterSummary(){
 
 function rSort2(col){ rSortState={col,dir:rSortState.col===col?rSortState.dir*-1:(col==='pos'||col==='name'?1:-1)}; renderRoster(); }
 
+// Position groups for stat routing
+const SKILL_POS  = new Set(['QB','RB','WR','TE','FB']);
+const OL_POS     = new Set(['OL','OT','OG','OC','G','C']);
+const DL_POS     = new Set(['DL','DE','DT','NT']);
+const LB_POS     = new Set(['LB','ILB','OLB','MLB']);
+const DB_POS     = new Set(['DB','CB','S','SS','FS']);
+
+function getBoxStats(p){
+  const k = p.name.toLowerCase().trim();
+  return rosterBoxStats[k] || null;
+}
+
+// Returns the 6 stat <td> cells appropriate for the player's position
+function buildStatCols(p, ppaStats, sc){
+  const pos = p.position;
+
+  if(SKILL_POS.has(pos)){
+    // Skill: PPA/play | Pass PPA | Rush PPA | Usage | Plays | Total PPA
+    return `
+      ${sc(ppaStats?.ppa??null)}
+      ${sc(ppaStats?.passPPA??null,x=>x!==0?x.toFixed(3):'—')}
+      ${sc(ppaStats?.rushPPA??null,x=>x!==0?x.toFixed(3):'—')}
+      <td>${ppaStats?.usage!=null?((ppaStats.usage||0)*100).toFixed(1)+'%':'—'}</td>
+      <td style="color:var(--text2)">${ppaStats?.plays||'—'}</td>
+      ${sc(ppaStats?.totalPPA??null,x=>x.toFixed(1))}`;
+  }
+
+  const bs = getBoxStats(p);
+
+  if(OL_POS.has(pos)){
+    // OL: no individual CFBD stats — note team metric
+    return `
+      <td colspan="5" style="color:var(--text3);font-size:10px;font-style:italic">OL metrics are team-level — use PFF grades</td>
+      <td style="color:var(--text3)">—</td>`;
+  }
+
+  if(DL_POS.has(pos)){
+    // DL: Tackles | Sacks | TFL | PBUs | — | —
+    const tot  = bs?.tackles||bs?.total||null;
+    const sacks= bs?.sacks||null;
+    const tfl  = bs?.tfl||bs?.tacklesForLoss||null;
+    const pds  = bs?.passesDefended||bs?.pds||null;
+    return `
+      <td style="font-weight:600;color:var(--text)">${tot??'—'}</td>
+      <td style="color:${(sacks||0)>0?'var(--green)':'var(--text2)'};font-weight:${(sacks||0)>0?700:400}">${sacks!=null?sacks.toFixed(1):'—'}</td>
+      <td style="color:${(tfl||0)>0?'var(--green)':'var(--text2)'}">${tfl!=null?tfl.toFixed(1):'—'}</td>
+      <td style="color:var(--text2)">${pds??'—'}</td>
+      <td style="color:var(--text3);font-size:9px">DL</td>
+      <td style="color:var(--text3)">—</td>`;
+  }
+
+  if(LB_POS.has(pos)){
+    // LB: Tackles | Sacks | TFL | PBUs | — | —
+    const tot  = bs?.tackles||bs?.total||null;
+    const sacks= bs?.sacks||null;
+    const tfl  = bs?.tfl||bs?.tacklesForLoss||null;
+    const pds  = bs?.passesDefended||bs?.pds||null;
+    return `
+      <td style="font-weight:600;color:var(--text)">${tot??'—'}</td>
+      <td style="color:${(sacks||0)>0?'var(--green)':'var(--text2)'};font-weight:${(sacks||0)>0?700:400}">${sacks!=null?sacks.toFixed(1):'—'}</td>
+      <td style="color:${(tfl||0)>0?'var(--green)':'var(--text2)'}">${tfl!=null?tfl.toFixed(1):'—'}</td>
+      <td style="color:var(--text2)">${pds??'—'}</td>
+      <td style="color:var(--text3);font-size:9px">LB</td>
+      <td style="color:var(--text3)">—</td>`;
+  }
+
+  if(DB_POS.has(pos)){
+    // DB: Tackles | INTs | PBUs | — | — | —
+    const tot  = bs?.tackles||bs?.total||null;
+    const ints = bs?.interceptions||null;
+    const pds  = bs?.passesDefended||bs?.pds||null;
+    return `
+      <td style="font-weight:600;color:var(--text)">${tot??'—'}</td>
+      <td style="color:${(ints||0)>0?'var(--gold)':'var(--text2)'};font-weight:${(ints||0)>0?700:400}">${ints??'—'}</td>
+      <td style="color:${(pds||0)>0?'var(--green)':'var(--text2)'}">${pds??'—'}</td>
+      <td style="color:var(--text3)">—</td>
+      <td style="color:var(--text3);font-size:9px">DB</td>
+      <td style="color:var(--text3)">—</td>`;
+  }
+
+  // Fallback (K, P, LS, etc.)
+  return `<td colspan="5" style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td>`;
+}
+
 function renderRoster(){
   const posF=document.getElementById('rPos').value;
   const yrF=document.getElementById('rYr').value;
@@ -771,12 +900,7 @@ function renderRoster(){
       <td style="color:var(--text2)">${p.weight||'—'}</td>
       <td style="color:var(--text3);font-size:10px;max-width:110px;overflow:hidden;text-overflow:ellipsis">${p.hometown}</td>
       <td style="font-size:10px;color:${isT?'var(--amber)':'var(--text3)'}">${p.prevTeam||'—'}</td>
-      ${sc(stats?.ppa??null)}
-      ${sc(stats?.passPPA??null,x=>x!==0?x.toFixed(3):'—')}
-      ${sc(stats?.rushPPA??null,x=>x!==0?x.toFixed(3):'—')}
-      <td>${stats?.usage!=null?((stats.usage||0)*100).toFixed(1)+'%':'—'}</td>
-      <td style="color:var(--text2)">${stats?.plays||'—'}</td>
-      ${sc(stats?.totalPPA??null,x=>x.toFixed(1))}
+      ${buildStatCols(p, stats, sc)}
       <td style="font-size:10px;color:${tier.color}">${tier.tier}</td>
     </tr>`;
   });
